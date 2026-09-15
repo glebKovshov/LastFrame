@@ -43,6 +43,8 @@
 - Added portable capture input seams for macOS `avfoundation` and Linux X11
   `x11grab`; non-Windows builds no longer emit Windows-only audio/capture inputs.
 - Extended core settings coverage for all supported H.264 backend identifiers.
+- Added Windows DisplayConfig HDR capability detection and an explicit HDR → SDR
+  warning in the Capture UI; protected surfaces remain OS-controlled.
 - Added a hardware smoke override (`LASTFRAME_FORCE_WGC=1`) used to validate the
   Windows Graphics Capture path end-to-end on the development machine.
 

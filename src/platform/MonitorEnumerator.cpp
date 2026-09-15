@@ -3,7 +3,51 @@
 #include <QGuiApplication>
 #include <QScreen>
 
+#if defined(Q_OS_WIN)
+#include <Windows.h>
+#include <vector>
+#endif
+
 namespace LastFrame::Platform {
+
+#if defined(Q_OS_WIN)
+namespace {
+
+bool isHdrEnabled(const QString& screenName) {
+    UINT pathCount = 0;
+    UINT modeCount = 0;
+    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount) != ERROR_SUCCESS ||
+        pathCount == 0) {
+        return false;
+    }
+    std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
+    std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
+    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths.data(), &modeCount, modes.data(), nullptr) !=
+        ERROR_SUCCESS) {
+        return false;
+    }
+    for (const auto& path : paths) {
+        DISPLAYCONFIG_SOURCE_DEVICE_NAME source{};
+        source.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+        source.header.size = sizeof(source);
+        source.header.adapterId = path.sourceInfo.adapterId;
+        source.header.id = path.sourceInfo.id;
+        if (DisplayConfigGetDeviceInfo(&source.header) != ERROR_SUCCESS ||
+            QString::fromWCharArray(source.viewGdiDeviceName) != screenName) {
+            continue;
+        }
+        DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO color{};
+        color.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+        color.header.size = sizeof(color);
+        color.header.adapterId = path.targetInfo.adapterId;
+        color.header.id = path.targetInfo.id;
+        return DisplayConfigGetDeviceInfo(&color.header) == ERROR_SUCCESS && color.advancedColorEnabled != FALSE;
+    }
+    return false;
+}
+
+} // namespace
+#endif
 
 QVector<MonitorInfo> MonitorEnumerator::enumerate() {
     QVector<MonitorInfo> result;
@@ -25,6 +69,9 @@ QVector<MonitorInfo> MonitorEnumerator::enumerate() {
         monitor.orientation = screen->orientation() == Qt::LandscapeOrientation
                                   ? QStringLiteral("Landscape")
                                   : QStringLiteral("Portrait");
+#if defined(Q_OS_WIN)
+        monitor.hdrEnabled = isHdrEnabled(screenName);
+#endif
         result.push_back(std::move(monitor));
     }
     return result;

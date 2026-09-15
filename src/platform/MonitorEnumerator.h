@@ -15,6 +15,7 @@ struct MonitorInfo {
     int refreshRate = 60;
     qreal devicePixelRatio = 1.0;
     QString orientation;
+    bool hdrEnabled = false;
 };
 
 class MonitorEnumerator final {

@@ -45,6 +45,8 @@
 - Portable recorder на macOS использует FFmpeg `avfoundation`, на Linux/X11 —
   `x11grab`; Windows-only `wasapi/dshow/ddagrab` больше не формируются на других ОС.
   Нативные macOS ScreenCaptureKit и Linux PipeWire/portal остаются отдельными backend'ами.
+- Windows DisplayConfig определяет активный HDR-монитор, список его помечает
+  `HDR → SDR`, а UI явно предупреждает о потере HDR-диапазона; DRM не обходится.
 - Ошибки recorder/hotkey/update имеют стабильные технические коды для диагностики:
   `capture_failed`, `audio_device_lost`, `encoder_unavailable`, `export_failed`,
   `queue_overflow`, `hotkey_conflict`, `monitor_changed`.

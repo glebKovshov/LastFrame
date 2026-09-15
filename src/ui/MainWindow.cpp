@@ -353,7 +353,7 @@ QWidget* MainWindow::buildCapturePage() {
     outputHeightSpin_->setValue(settings_.capture.outputHeight);
     form->addRow(QStringLiteral("Высота вывода"), outputHeightSpin_);
     layout->addLayout(form);
-    layout->addWidget(description(QStringLiteral("Регион ограничивается выбранным монитором. Параметры применяются при следующем запуске буфера."), page));
+    layout->addWidget(description(QStringLiteral("Регион ограничивается выбранным монитором. HDR-мониторы помечаются как HDR → SDR: защищённый контент не обходится, а HDR-диапазон может быть потерян. Параметры применяются при следующем запуске буфера."), page));
     layout->addStretch();
     connect(monitorCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
         if (index >= 0 && index < monitors_.size()) {
@@ -847,7 +847,8 @@ void MainWindow::refreshMonitors() {
         signature += monitor.id + QStringLiteral("|") + QString::number(monitor.resolution.width()) +
                      QStringLiteral("x") + QString::number(monitor.resolution.height()) + QStringLiteral("|") +
                      QString::number(monitor.refreshRate) + QStringLiteral("|") + monitor.orientation +
-                     QStringLiteral("|") + QString::number(monitor.devicePixelRatio, 'f', 3) + QStringLiteral(";");
+                     QStringLiteral("|") + QString::number(monitor.devicePixelRatio, 'f', 3) + QStringLiteral("|") +
+                     (monitor.hdrEnabled ? QStringLiteral("hdr") : QStringLiteral("sdr")) + QStringLiteral(";");
     }
     const bool changed = monitorSignatureInitialized_ && signature != monitorSignature_;
     monitorSignature_ = signature;
@@ -1068,11 +1069,12 @@ void MainWindow::populateMonitorCombo() {
     const QSignalBlocker blocker(monitorCombo_);
     monitorCombo_->clear();
     for (const auto& monitor : monitors_) {
-        monitorCombo_->addItem(QStringLiteral("%1 — %2x%3 @ %4 Hz")
+        monitorCombo_->addItem(QStringLiteral("%1 — %2x%3 @ %4 Hz%5")
                                    .arg(monitor.name)
                                    .arg(monitor.resolution.width())
                                    .arg(monitor.resolution.height())
-                                   .arg(monitor.refreshRate),
+                                   .arg(monitor.refreshRate)
+                                   .arg(monitor.hdrEnabled ? QStringLiteral(" — HDR → SDR") : QString()),
                                monitor.id);
     }
     const int selected = Platform::MonitorEnumerator::indexForId(
