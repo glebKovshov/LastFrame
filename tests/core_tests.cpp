@@ -192,10 +192,12 @@ void testSettings() {
     assert(webmPair.video.codec == "libvpx-vp9");
     const auto mp4Pair = Settings::fromJson({{"video", {{"container", "mp4"}, {"codec", "libvpx-vp9"}}}});
     assert(mp4Pair.video.codec == "auto");
-    for (const char* codec : {"h264_nvenc", "h264_amf", "h264_qsv", "h264_videotoolbox", "libx264", "libvpx-vp9"}) {
+    for (const char* codec : {"h264_nvenc", "h264_amf", "h264_qsv", "h264_videotoolbox", "libx264"}) {
         const auto codecSettings = Settings::fromJson({{"video", {{"codec", codec}}}});
         assert(codecSettings.video.codec == codec);
     }
+    const auto vp9Settings = Settings::fromJson({{"video", {{"container", "webm"}, {"codec", "libvpx-vp9"}}}});
+    assert(vp9Settings.video.codec == "libvpx-vp9");
     assert(normalized.extras.at("futureSection").at("keep") == true);
 
     {
