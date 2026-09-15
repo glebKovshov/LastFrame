@@ -117,7 +117,8 @@ if(LASTFRAME_BUILD_UI)
             target_include_directories(LastFrame PRIVATE "${LASTFRAME_CPPWINRT_INCLUDE_DIR}")
             target_link_libraries(LastFrame PRIVATE user32 shell32 ole32 avrt d3d11 dxgi gdi32 runtimeobject wtsapi32)
         elseif(APPLE)
-            target_link_libraries(LastFrame PRIVATE Carbon)
+            find_library(LASTFRAME_CARBON_FRAMEWORK Carbon REQUIRED)
+            target_link_libraries(LastFrame PRIVATE "${LASTFRAME_CARBON_FRAMEWORK}")
         endif()
 
         set_target_properties(LastFrame PROPERTIES
