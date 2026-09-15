@@ -50,14 +50,15 @@
 - Наблюдатель мониторов с интервалом 500 ms: активный буфер безопасно останавливается при изменении дисплея.
 - Стабильные идентификаторы мониторов больше не зависят от разрешения и координат;
   недоступный выбранный монитор явно блокирует старт вместо тихого выбора первого.
-- Страница Notifications с настройками системных уведомлений и локального
-  non-interactive toast overlay; настройки сохраняются в JSON.
+- Страница Notifications с настройками системных уведомлений и click-through
+  corner toast overlay с анимированным индикатором; на Windows overlay запрашивает
+  `WDA_EXCLUDEFROMCAPTURE`, настройки сохраняются в JSON.
 - GitHub Actions для core tests и Windows portable artifact.
 
 ## Следующие обязательные срезы по ТЗ
 
-1. Полноэкранный click-through overlay, исключение overlay из capture backend,
-   HDR/DRM сценарии и явные capability/error states для недоступных или
+1. Проверка на конкретных capture backend'ах, что исключение overlay действительно
+   соблюдается, затем HDR/DRM сценарии и явные capability/error states для недоступных или
    защищённых поверхностей; отдельная проверка SDR-конверсии HDR.
 2. Device-loss recovery с попытками переподключения и auto-resume; текущий
    native WASAPI path уже передаёт mixed PCM в encoder, имеет silence-fill,

@@ -30,6 +30,8 @@
   toggle; notification preferences are persisted in the existing JSON schema.
 - Added encoder capability entries for NVIDIA NVENC, AMD AMF, Intel QSV and Apple
   VideoToolbox, plus an estimated export size and FFmpeg output-size guard.
+- Added a click-through corner notification overlay with animated accent/error
+  indicator; on supported Windows capture APIs it requests `WDA_EXCLUDEFROMCAPTURE`.
 
 ## 0.1.0 — Windows MVP
 

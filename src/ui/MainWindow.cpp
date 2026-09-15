@@ -1,4 +1,5 @@
 #include "ui/MainWindow.h"
+#include "ui/NotificationOverlay.h"
 #include "ui/RegionSelector.h"
 #include "platform/AudioDeviceEnumerator.h"
 
@@ -76,12 +77,7 @@ MainWindow::MainWindow(QWidget* parent)
     setMinimumSize(900, 620);
     loadSettings();
     buildUi();
-    toastTimer_.setSingleShot(true);
-    connect(&toastTimer_, &QTimer::timeout, this, [this] {
-        if (toastLabel_ != nullptr) {
-            toastLabel_->hide();
-        }
-    });
+    notificationOverlay_ = new NotificationOverlay;
     if (settingsRecovered_) {
         showToast(QStringLiteral("settings.json повреждён; создана конфигурация по умолчанию."), true);
     }
@@ -197,6 +193,7 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow() {
     saveSettings();
+    delete notificationOverlay_;
 }
 
 void MainWindow::buildUi() {
@@ -954,21 +951,18 @@ void MainWindow::showToast(const QString& text, const bool isError) {
     if (!settings_.notifications.enabled || !settings_.notifications.overlayEnabled) {
         return;
     }
-    if (toastLabel_ == nullptr) {
-        toastLabel_ = new QLabel(this);
-        toastLabel_->setAttribute(Qt::WA_TransparentForMouseEvents);
-        toastLabel_->setMargin(12);
-        toastLabel_->setWordWrap(true);
+    if (notificationOverlay_ == nullptr) {
+        return;
     }
-    toastLabel_->setStyleSheet(QStringLiteral("QLabel { background: %1; color: white; border-radius: 10px; padding: 10px 14px; }")
-                                   .arg(isError ? QStringLiteral("#8F2D24") : QStringLiteral("#4A4A4A")));
-    toastLabel_->setText(text);
-    toastLabel_->adjustSize();
-    const int margin = 20;
-    toastLabel_->move(std::max(margin, width() - toastLabel_->width() - margin), margin);
-    toastLabel_->show();
-    toastLabel_->raise();
-    toastTimer_.start(3500);
+    int monitorIndex = Platform::MonitorEnumerator::indexForId(
+        monitors_, QString::fromStdString(settings_.capture.monitorId));
+    if (monitorIndex < 0 && !monitors_.isEmpty()) {
+        monitorIndex = 0;
+    }
+    if (monitorIndex >= 0 && monitorIndex < monitors_.size()) {
+        notificationOverlay_->setMonitorGeometry(monitors_.at(monitorIndex).geometry);
+    }
+    notificationOverlay_->showMessage(text, isError);
 }
 
 void MainWindow::setupTray() {

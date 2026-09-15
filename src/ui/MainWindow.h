@@ -27,6 +27,8 @@ class QAction;
 
 namespace LastFrame::UI {
 
+class NotificationOverlay;
+
 class MainWindow final : public QMainWindow {
     Q_OBJECT
 
@@ -116,10 +118,9 @@ private:
     QPushButton* diagnosticsButton_ = nullptr;
     QSystemTrayIcon* tray_ = nullptr;
     QAction* trayMuteAction_ = nullptr;
-    QLabel* toastLabel_ = nullptr;
+    NotificationOverlay* notificationOverlay_ = nullptr;
     QTimer monitorTimer_;
     QTimer autoResumeTimer_;
-    QTimer toastTimer_;
     QString monitorSignature_;
     QString autoResumeSignature_;
     QUrl latestReleaseUrl_;
