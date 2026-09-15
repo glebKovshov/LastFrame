@@ -258,25 +258,25 @@ QString localizedUiText(const QString& text, const QString& language) {
         }
     }
     if (english) {
-        if (text.startsWith(QStringLiteral("Клипы: "))) return QStringLiteral("Clips: ") + text.mid(7);
-        if (text.startsWith(QStringLiteral("Временные сегменты: "))) return QStringLiteral("Temporary segments: ") + text.mid(21);
-        if (text.startsWith(QStringLiteral("Свободно примерно "))) return QStringLiteral("Approximately ") + text.mid(18);
-        if (text.startsWith(QStringLiteral("Открыть "))) return QStringLiteral("Open ") + text.mid(7);
-        if (text.startsWith(QStringLiteral("Захват идёт для монитора "))) return QStringLiteral("Capture is running for monitor ") + text.mid(26);
-        if (text.startsWith(QStringLiteral("Клип сохранён: "))) return QStringLiteral("Clip saved: ") + text.mid(14);
-        if (text.startsWith(QStringLiteral("Доступна новая версия "))) return QStringLiteral("A new version is available ") + text.mid(23);
+        if (text.startsWith(QStringLiteral("Клипы: "))) return QStringLiteral("Clips: ") + text.mid(QStringLiteral("Клипы: ").size());
+        if (text.startsWith(QStringLiteral("Временные сегменты: "))) return QStringLiteral("Temporary segments: ") + text.mid(QStringLiteral("Временные сегменты: ").size());
+        if (text.startsWith(QStringLiteral("Свободно примерно "))) return QStringLiteral("Approximately ") + text.mid(QStringLiteral("Свободно примерно ").size());
+        if (text.startsWith(QStringLiteral("Открыть "))) return QStringLiteral("Open ") + text.mid(QStringLiteral("Открыть ").size());
+        if (text.startsWith(QStringLiteral("Захват идёт для монитора "))) return QStringLiteral("Capture is running for monitor ") + text.mid(QStringLiteral("Захват идёт для монитора ").size());
+        if (text.startsWith(QStringLiteral("Клип сохранён: "))) return QStringLiteral("Clip saved: ") + text.mid(QStringLiteral("Клип сохранён: ").size());
+        if (text.startsWith(QStringLiteral("Доступна новая версия "))) return QStringLiteral("A new version is available ") + text.mid(QStringLiteral("Доступна новая версия ").size());
         if (text.startsWith(QStringLiteral("Лог содержит только технические события и не записывает кадры, звук или содержимое окон: "))) {
             return QStringLiteral("The log contains technical events only and never records frames, audio, or window contents: ") +
                    text.mid(QStringLiteral("Лог содержит только технические события и не записывает кадры, звук или содержимое окон: ").size());
         }
     } else {
-        if (text.startsWith(QStringLiteral("Clips: "))) return QStringLiteral("Клипы: ") + text.mid(7);
-        if (text.startsWith(QStringLiteral("Temporary segments: "))) return QStringLiteral("Временные сегменты: ") + text.mid(21);
-        if (text.startsWith(QStringLiteral("Approximately "))) return QStringLiteral("Свободно примерно ") + text.mid(14);
-        if (text.startsWith(QStringLiteral("Open "))) return QStringLiteral("Открыть ") + text.mid(5);
-        if (text.startsWith(QStringLiteral("Capture is running for monitor "))) return QStringLiteral("Захват идёт для монитора ") + text.mid(31);
-        if (text.startsWith(QStringLiteral("Clip saved: "))) return QStringLiteral("Клип сохранён: ") + text.mid(12);
-        if (text.startsWith(QStringLiteral("A new version is available "))) return QStringLiteral("Доступна новая версия ") + text.mid(27);
+        if (text.startsWith(QStringLiteral("Clips: "))) return QStringLiteral("Клипы: ") + text.mid(QStringLiteral("Clips: ").size());
+        if (text.startsWith(QStringLiteral("Temporary segments: "))) return QStringLiteral("Временные сегменты: ") + text.mid(QStringLiteral("Temporary segments: ").size());
+        if (text.startsWith(QStringLiteral("Approximately "))) return QStringLiteral("Свободно примерно ") + text.mid(QStringLiteral("Approximately ").size());
+        if (text.startsWith(QStringLiteral("Open "))) return QStringLiteral("Открыть ") + text.mid(QStringLiteral("Open ").size());
+        if (text.startsWith(QStringLiteral("Capture is running for monitor "))) return QStringLiteral("Захват идёт для монитора ") + text.mid(QStringLiteral("Capture is running for monitor ").size());
+        if (text.startsWith(QStringLiteral("Clip saved: "))) return QStringLiteral("Клип сохранён: ") + text.mid(QStringLiteral("Clip saved: ").size());
+        if (text.startsWith(QStringLiteral("A new version is available "))) return QStringLiteral("Доступна новая версия ") + text.mid(QStringLiteral("A new version is available ").size());
         if (text.startsWith(QStringLiteral("The log contains technical events only and never records frames, audio, or window contents: "))) {
             return QStringLiteral("Лог содержит только технические события и не записывает кадры, звук или содержимое окон: ") +
                    text.mid(QStringLiteral("The log contains technical events only and never records frames, audio, or window contents: ").size());
