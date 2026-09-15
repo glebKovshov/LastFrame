@@ -40,6 +40,8 @@
   `maxFileSizeMiB` самим FFmpeg до атомарного rename.
 - `Auto` при ошибке последовательно пробует NVENC → AMF → QSV → VideoToolbox,
   затем software H.264; ручные backend'ы сохраняют отдельный software fallback.
+- Перед запуском и export проверяются доступность, read-only и свободное место
+  temporary/clips storage; при проблеме выдаётся `[disk_full]`, старые клипы не удаляются.
 - Ошибки recorder/hotkey/update имеют стабильные технические коды для диагностики:
   `capture_failed`, `audio_device_lost`, `encoder_unavailable`, `export_failed`,
   `queue_overflow`, `hotkey_conflict`, `monitor_changed`.

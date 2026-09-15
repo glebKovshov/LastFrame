@@ -15,6 +15,7 @@
 #include <QFileInfo>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
+#include <QStorageInfo>
 #include <QTemporaryFile>
 
 #include <chrono>
@@ -167,7 +168,16 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
     segmentDirectory_ = settings_.buffer.temporaryDirectory.empty()
                             ? QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/segments"
                             : QString::fromStdString(settings_.buffer.temporaryDirectory.string());
-    QDir().mkpath(segmentDirectory_);
+    if (!QDir().mkpath(segmentDirectory_)) {
+        emit error(QStringLiteral("[disk_full] Не удалось создать временный каталог сегментов: %1").arg(segmentDirectory_));
+        return;
+    }
+    const QStorageInfo temporaryStorage(segmentDirectory_);
+    if (!temporaryStorage.isValid() || !temporaryStorage.isReady() || temporaryStorage.isReadOnly() ||
+        temporaryStorage.bytesAvailable() < 64LL * 1024LL * 1024LL) {
+        emit error(QStringLiteral("[disk_full] Недостаточно доступного локального диска для временных сегментов."));
+        return;
+    }
     const QDir directory(segmentDirectory_);
     for (const QFileInfo& file : directory.entryInfoList({QStringLiteral("segment_*.mkv"),
                                                            QStringLiteral("concat-*.txt"),
@@ -323,7 +333,16 @@ void PortableSegmentRecorder::saveClip() {
     const QString clipsDirectory = settings_.storage.clipsDirectory.empty()
                                        ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame"
                                        : QString::fromStdString(settings_.storage.clipsDirectory.string());
-    QDir().mkpath(clipsDirectory);
+    if (!QDir().mkpath(clipsDirectory)) {
+        emit error(QStringLiteral("[disk_full] Не удалось создать каталог клипов: %1").arg(clipsDirectory));
+        return;
+    }
+    const QStorageInfo clipStorage(clipsDirectory);
+    if (!clipStorage.isValid() || !clipStorage.isReady() || clipStorage.isReadOnly() ||
+        clipStorage.bytesAvailable() < 64LL * 1024LL * 1024LL) {
+        emit error(QStringLiteral("[disk_full] Недостаточно доступного локального диска для экспорта клипа."));
+        return;
+    }
     QString container = QString::fromStdString(settings_.video.container).toLower();
     if (container != QStringLiteral("mp4") && container != QStringLiteral("mkv") &&
         container != QStringLiteral("webm")) {

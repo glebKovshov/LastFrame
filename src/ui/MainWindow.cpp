@@ -29,6 +29,7 @@
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QStandardPaths>
+#include <QStorageInfo>
 #include <QStyle>
 #include <QSystemTrayIcon>
 #include <QVBoxLayout>
@@ -602,12 +603,23 @@ QWidget* MainWindow::buildStoragePage() {
     layout->setContentsMargins(42, 36, 42, 36);
     layout->addWidget(heading(QStringLiteral("Storage"), page));
     layout->addWidget(description(QStringLiteral("Готовые клипы не удаляются автоматически. Незавершённые временные сегменты находятся в каталоге приложения."), page));
-    auto* path = new QLabel(settings_.storage.clipsDirectory.empty()
-                                ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame"
-                                : QString::fromStdString(settings_.storage.clipsDirectory.string()), page);
+    const QString clipsPath = settings_.storage.clipsDirectory.empty()
+                                  ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame"
+                                  : QString::fromStdString(settings_.storage.clipsDirectory.string());
+    auto* path = new QLabel(clipsPath, page);
     path->setWordWrap(true);
     layout->addWidget(path);
-    layout->addWidget(description(QStringLiteral("Portable MVP использует локальный системный диск; сетевые и съёмные каталоги не проверяются как гарантированные."), page));
+    const QStorageInfo storage(clipsPath);
+    const double freeGiB = storage.isValid() && storage.isReady()
+                               ? static_cast<double>(storage.bytesAvailable()) / 1024.0 / 1024.0 / 1024.0
+                               : 0.0;
+    const QString storageState = !storage.isValid() || !storage.isReady()
+                                     ? QStringLiteral("Носитель недоступен или ещё не готов.")
+                                     : storage.isReadOnly()
+                                           ? QStringLiteral("Носитель доступен только для чтения.")
+                                           : QStringLiteral("Свободно примерно %1 GiB.").arg(freeGiB, 0, 'f', 1);
+    layout->addWidget(description(storageState, page));
+    layout->addWidget(description(QStringLiteral("Portable MVP использует локальный системный диск; сетевые и съёмные каталоги не являются гарантированными и блокируются при read-only/недостатке места."), page));
     layout->addStretch();
     return page;
 }
