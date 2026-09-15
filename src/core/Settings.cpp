@@ -121,14 +121,17 @@ Settings Settings::fromJson(const nlohmann::json& json) {
         return settings;
     }
 
-    settings.schemaVersion = readValue(json, "schemaVersion", 1);
+    settings.schemaVersion = std::max(1, readValue(json, "schemaVersion", 1));
     settings.language = readValue(json, "language", settings.language);
+    if (settings.language != "ru" && settings.language != "en") {
+        settings.language = "ru";
+    }
     settings.extras = sectionExtras(json, {"schemaVersion", "language", "buffer", "capture", "video",
                                            "audio", "hotkeys", "storage", "notifications", "privacy"});
 
     const auto buffer = json.value("buffer", nlohmann::json::object());
-    settings.buffer.durationSeconds = readValue(buffer, "durationSeconds", settings.buffer.durationSeconds);
-    settings.buffer.ramLimitMiB = readValue(buffer, "ramLimitMiB", settings.buffer.ramLimitMiB);
+    settings.buffer.durationSeconds = std::clamp(readValue(buffer, "durationSeconds", settings.buffer.durationSeconds), 5, 300);
+    settings.buffer.ramLimitMiB = std::clamp(readValue(buffer, "ramLimitMiB", settings.buffer.ramLimitMiB), 64, 16384);
     settings.buffer.temporaryDirectory = pathFromJson(buffer, "temporaryDirectory");
     settings.buffer.autoStart = readValue(buffer, "autoStart", settings.buffer.autoStart);
     settings.buffer.extras = sectionExtras(buffer, {"durationSeconds", "ramLimitMiB", "temporaryDirectory", "autoStart"});
@@ -136,14 +139,17 @@ Settings Settings::fromJson(const nlohmann::json& json) {
     const auto capture = json.value("capture", nlohmann::json::object());
     settings.capture.monitorId = readValue(capture, "monitorId", settings.capture.monitorId);
     settings.capture.source = readValue(capture, "source", settings.capture.source);
+    if (settings.capture.source != "full_monitor" && settings.capture.source != "custom_region") {
+        settings.capture.source = "full_monitor";
+    }
     const auto region = capture.value("region", nlohmann::json::object());
-    settings.capture.regionX = readValue(region, "x", settings.capture.regionX);
-    settings.capture.regionY = readValue(region, "y", settings.capture.regionY);
-    settings.capture.regionWidth = readValue(region, "width", settings.capture.regionWidth);
-    settings.capture.regionHeight = readValue(region, "height", settings.capture.regionHeight);
-    settings.capture.outputWidth = readValue(capture, "outputWidth", settings.capture.outputWidth);
-    settings.capture.outputHeight = readValue(capture, "outputHeight", settings.capture.outputHeight);
-    settings.capture.fps = readValue(capture, "fps", settings.capture.fps);
+    settings.capture.regionX = std::clamp(readValue(region, "x", settings.capture.regionX), -16384, 16384);
+    settings.capture.regionY = std::clamp(readValue(region, "y", settings.capture.regionY), -16384, 16384);
+    settings.capture.regionWidth = std::clamp(readValue(region, "width", settings.capture.regionWidth), 0, 16384);
+    settings.capture.regionHeight = std::clamp(readValue(region, "height", settings.capture.regionHeight), 0, 16384);
+    settings.capture.outputWidth = std::clamp(readValue(capture, "outputWidth", settings.capture.outputWidth), 0, 16384);
+    settings.capture.outputHeight = std::clamp(readValue(capture, "outputHeight", settings.capture.outputHeight), 0, 16384);
+    settings.capture.fps = std::clamp(readValue(capture, "fps", settings.capture.fps), 15, 360);
     settings.capture.showCursor = readValue(capture, "showCursor", settings.capture.showCursor);
     settings.capture.autoResume = readValue(capture, "autoResume", settings.capture.autoResume);
     settings.capture.extras = sectionExtras(capture, {"monitorId", "source", "region", "outputWidth", "outputHeight",
@@ -151,10 +157,21 @@ Settings Settings::fromJson(const nlohmann::json& json) {
 
     const auto video = json.value("video", nlohmann::json::object());
     settings.video.container = readValue(video, "container", settings.video.container);
+    if (settings.video.container != "mp4" && settings.video.container != "mkv" && settings.video.container != "webm") {
+        settings.video.container = "mp4";
+    }
     settings.video.codec = readValue(video, "codec", settings.video.codec);
+    if (settings.video.codec != "auto" && settings.video.codec != "h264_nvenc" &&
+        settings.video.codec != "libx264" && settings.video.codec != "libvpx-vp9") {
+        settings.video.codec = "auto";
+    }
     settings.video.preset = readValue(video, "preset", settings.video.preset);
-    settings.video.customBitrateKbps = readValue(video, "customBitrateKbps", settings.video.customBitrateKbps);
-    settings.video.maxFileSizeMiB = readValue(video, "maxFileSizeMiB", settings.video.maxFileSizeMiB);
+    if (settings.video.preset != "low" && settings.video.preset != "medium" && settings.video.preset != "high" &&
+        settings.video.preset != "ultra" && settings.video.preset != "custom") {
+        settings.video.preset = "high";
+    }
+    settings.video.customBitrateKbps = std::clamp(readValue(video, "customBitrateKbps", settings.video.customBitrateKbps), 1000, 100000);
+    settings.video.maxFileSizeMiB = std::clamp(readValue(video, "maxFileSizeMiB", settings.video.maxFileSizeMiB), 64, 4096);
     settings.video.extras = sectionExtras(video, {"container", "codec", "preset", "customBitrateKbps", "maxFileSizeMiB"});
 
     const auto audio = json.value("audio", nlohmann::json::object());
@@ -164,7 +181,7 @@ Settings Settings::fromJson(const nlohmann::json& json) {
     settings.audio.microphoneDeviceId = readValue(audio, "microphoneDeviceId", settings.audio.microphoneDeviceId);
     settings.audio.systemVolume = std::clamp(readValue(audio, "systemVolume", settings.audio.systemVolume), 0.0, 2.0);
     settings.audio.microphoneVolume = std::clamp(readValue(audio, "microphoneVolume", settings.audio.microphoneVolume), 0.0, 2.0);
-    settings.audio.sampleRate = readValue(audio, "sampleRate", settings.audio.sampleRate);
+    settings.audio.sampleRate = std::clamp(readValue(audio, "sampleRate", settings.audio.sampleRate), 8000, 192000);
     settings.audio.extras = sectionExtras(audio, {"systemEnabled", "systemDeviceId", "microphoneEnabled", "microphoneDeviceId",
                                                   "systemVolume", "microphoneVolume", "sampleRate"});
 

@@ -12,6 +12,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <nlohmann/json.hpp>
 
 using namespace LastFrame::Core;
 
@@ -98,6 +99,27 @@ void testSettings() {
     assert(loaded.buffer.durationSeconds == 45);
     assert(loaded.extras.at("futureFlag") == true);
 
+    const auto normalized = Settings::fromJson({
+        {"language", "de"},
+        {"buffer", {{"durationSeconds", -4}, {"ramLimitMiB", 999999}}},
+        {"capture", {{"source", "unknown"}, {"fps", 1}, {"outputWidth", 99999}}},
+        {"video", {{"container", "avi"}, {"codec", "unknown"}, {"preset", "bad"},
+                    {"customBitrateKbps", 1}, {"maxFileSizeMiB", 99999}}},
+        {"futureSection", {{"keep", true}}},
+    });
+    assert(normalized.language == "ru");
+    assert(normalized.buffer.durationSeconds == 5);
+    assert(normalized.buffer.ramLimitMiB == 16384);
+    assert(normalized.capture.source == "full_monitor");
+    assert(normalized.capture.fps == 15);
+    assert(normalized.capture.outputWidth == 16384);
+    assert(normalized.video.container == "mp4");
+    assert(normalized.video.codec == "auto");
+    assert(normalized.video.preset == "high");
+    assert(normalized.video.customBitrateKbps == 1000);
+    assert(normalized.video.maxFileSizeMiB == 4096);
+    assert(normalized.extras.at("futureSection").at("keep") == true);
+
     {
         std::ofstream broken(path, std::ios::trunc);
         broken << "{broken";
@@ -106,6 +128,15 @@ void testSettings() {
     const auto recoveredSettings = store.load(&recovered);
     assert(recovered);
     assert(recoveredSettings.buffer.durationSeconds == 30);
+    bool backupFound = false;
+    for (const auto& entry : std::filesystem::directory_iterator(path.parent_path())) {
+        if (entry.path().filename().string().starts_with("settings.json.broken-")) {
+            backupFound = true;
+            std::filesystem::remove(entry.path());
+        }
+    }
+    assert(backupFound);
+    std::filesystem::remove_all(path.parent_path());
 }
 
 } // namespace

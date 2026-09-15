@@ -48,6 +48,7 @@ Settings SettingsStore::load(bool* recovered) const {
         }
         const std::string content((std::istreambuf_iterator<char>(input)),
                                   std::istreambuf_iterator<char>());
+        input.close();
         const auto first = content.find_first_not_of(" \t\r\n");
         const auto last = content.find_last_not_of(" \t\r\n");
         if (first == std::string::npos || content.at(first) != '{' || content.at(last) != '}') {
@@ -59,6 +60,17 @@ Settings SettingsStore::load(bool* recovered) const {
         const auto backup = path_.string() + ".broken-" + timestampForFile();
         std::error_code error;
         std::filesystem::rename(path_, backup, error);
+        if (error) {
+            // Some Windows filesystem providers reject rename while the file
+            // was recently opened. Preserve the recovery contract with a
+            // copy-then-remove fallback; the invalid file is never silently
+            // discarded.
+            error.clear();
+            std::filesystem::copy_file(path_, backup, std::filesystem::copy_options::overwrite_existing, error);
+            if (!error) {
+                std::filesystem::remove(path_, error);
+            }
+        }
         if (recovered != nullptr) {
             *recovered = true;
         }
