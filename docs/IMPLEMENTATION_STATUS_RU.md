@@ -38,7 +38,8 @@
   audio devices и доступные encoder profiles отображаются до запуска буфера.
 - Qt-free `AudioMixer` core primitive: общий master clock, silence-fill,
   независимые уровни, mute transitions, resampling и clipping; покрыт unit-тестами
-  и готов для подключения к native audio backends.
+  и подключён к native Windows WASAPI loopback/microphone backend через mixed
+  f32le pipe в encoder; отказ одного источника диагностируется без потери второго.
 - Редактор глобальных хоткеев с проверкой дубликатов и откатом при конфликте регистрации.
 - Наблюдатель мониторов с интервалом 500 ms: активный буфер безопасно останавливается при изменении дисплея.
 - GitHub Actions для core tests и Windows portable artifact.
@@ -47,12 +48,13 @@
 
 1. Windows Graphics Capture fallback для native backend, а также проверка HDR/DRM
    сценариев и явные capability/error states для недоступных поверхностей.
-2. Полный WASAPI loopback + microphone capture поверх `AudioMixer`, включая
-   runtime audio client, device-loss recovery и передачу mixed PCM в encoder.
+2. Device-loss recovery с попытками переподключения и auto-resume, mute/unmute
+   microphone hotkey и tray action; текущий native WASAPI path уже передаёт
+   mixed PCM в encoder и имеет fallback на portable FFmpeg audio.
 3. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
 4. Region selector, DPI-aware coordinates, monitor watcher и overlay.
 5. Интеграционные тесты на RTX 3070 и матрица Windows/Linux/macOS arm64.
 
-До реализации этих срезов UI честно показывает, что segment recorder требует
-доступный FFmpeg; native DXGI capability включается автоматически на Windows,
-а при недоступности остаётся portable FFmpeg fallback.
+До реализации следующих срезов UI честно показывает, что segment recorder
+требует доступный FFmpeg; native DXGI и native WASAPI capability включаются
+автоматически на Windows, а при недоступности остаются portable FFmpeg fallback.

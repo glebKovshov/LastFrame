@@ -105,6 +105,17 @@ void testAudioMixerResampleAndSilenceFill() {
     assert(std::abs(padded.front().samples[0] - 0.5F) < 0.0001F);
 }
 
+void testAudioMixerStartsWithSilence() {
+    AudioMixer mixer(8'000, 2, 8);
+    mixer.start();
+    const auto blocks = mixer.drainUntil(1'000);
+    assert(blocks.size() == 1);
+    assert(blocks.front().frameCount() == 8);
+    for (const float sample : blocks.front().samples) {
+        assert(sample == 0.0F);
+    }
+}
+
 void testStateMachine() {
     StateMachine state;
     assert(state.transition(AppState::Starting));
@@ -199,6 +210,7 @@ int main() {
     testRateLimiter();
     testAudioMixerSilenceAndClipping();
     testAudioMixerResampleAndSilenceFill();
+    testAudioMixerStartsWithSilence();
     testStateMachine();
     testQueue();
     testFilenameAllocator();

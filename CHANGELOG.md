@@ -12,6 +12,9 @@
   to the portable FFmpeg capture path.
 - Added the Qt-free master-clock AudioMixer primitive with silence fill,
   independent gain/mute, resampling, clipping and unit coverage.
+- Connected native Windows WASAPI loopback and microphone capture to the
+  AudioMixer, with mixed 48 kHz stereo f32le piped to the encoder and source
+  degradation/fallback diagnostics.
 - Added manual GitHub Releases update check, editable global hotkeys and monitor-change watcher.
 - Added microphone device discovery through DirectShow, system/microphone volume controls and audio fallback chain.
 - Added automatic NVENC to software H.264 encoder fallback.

@@ -41,7 +41,8 @@ Portable Windows ZIP собирается воспроизводимым скр�
 - один выбранный монитор;
 - full-monitor и прямоугольный region capture через полноэкранный overlay;
 - Desktop Duplication через FFmpeg `ddagrab` с автоматическим GDI fallback;
-- системный звук через WASAPI при наличии demuxer’а и микрофон через DirectShow с выбором устройства, громкостью и безопасным fallback;
+- системный звук и микрофон через native WASAPI + общий master-clock mixer на Windows,
+  с выбором устройства, независимой громкостью и безопасным fallback на FFmpeg;
 - независимые output width/height и постоянный FPS в пределах частоты монитора;
 - буфер последних 5–300 секунд, по умолчанию 30;
 - сохранение MP4/MKV/WebM через короткие MKV-сегменты и атомарное переименование результата;
@@ -58,7 +59,7 @@ Portable Windows ZIP собирается воспроизводимым скр�
 на Apple Silicon (включая M1). В текущем срезе полностью проверен Windows
 portable-путь; native macOS/Linux backends ещё не подключены.
 
-Native Windows DXGI Desktop Duplication уже подключён через D3D11 staging/raw-BGRA pipe; при недоступности native backend автоматически используются FFmpeg `ddagrab`, затем `gdigrab`. Микрофонный DirectShow path и управление громкостью уже работают, а полноценный WASAPI loopback + runtime master-clock mixer, Windows Graphics Capture fallback, прямые FFmpeg libraries и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
+Native Windows DXGI Desktop Duplication уже подключён через D3D11 staging/raw-BGRA pipe; native WASAPI loopback и microphone capture сводятся через `AudioMixer` в f32le pipe. При отказе native capture/audio автоматически используются portable FFmpeg backend’ы, включая `ddagrab`/`gdigrab` и доступный audio input. Windows Graphics Capture fallback, device-loss recovery с автоматическим resume, mute-hotkey, прямые FFmpeg libraries и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
 
 ## Публикация
 

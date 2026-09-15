@@ -29,6 +29,6 @@
 
 ## Аудио и ограничения MVP
 
-На странице Audio можно выбрать найденный микрофон и отдельно настроить громкость system/mic. Windows backend сначала использует native DXGI Desktop Duplication через D3D11, затем FFmpeg `ddagrab`, а при недоступности API — GDI fallback. Системный звук подключается только если используемая сборка FFmpeg содержит WASAPI; иначе LastFrame продолжит с микрофоном, если он доступен, либо с видео. Core master-clock mixer уже покрыт unit-тестами, но его runtime-подключение к WASAPI, Windows Graphics Capture fallback, Linux/macOS native capture и прямые FFmpeg libraries входят в последующие срезы.
+На странице Audio можно выбрать найденный микрофон и отдельно настроить громкость system/mic. Windows backend сначала использует native DXGI Desktop Duplication через D3D11, затем FFmpeg `ddagrab`, а при недоступности API — GDI fallback. Native WASAPI loopback и microphone capture сводятся через общий master-clock `AudioMixer` в одну 48 kHz stereo дорожку; при потере источника приложение показывает `[audio_device_lost]` и продолжает с доступным источником или fallback FFmpeg. Device-loss recovery с автоматическим resume, mute-hotkey, Windows Graphics Capture fallback, Linux/macOS native capture и прямые FFmpeg libraries входят в последующие срезы.
 
 Проверка обновлений запускается только вручную на странице Advanced и обращается к GitHub Releases. Телеметрия отсутствует.

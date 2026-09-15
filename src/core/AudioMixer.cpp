@@ -30,6 +30,12 @@ void AudioMixer::setVolumes(const double systemVolume, const double microphoneVo
     microphoneVolume_ = clampVolume(microphoneVolume);
 }
 
+void AudioMixer::start(const Timestamp masterStartPts) noexcept {
+    if (masterStartPts >= 0 && !nextOutputPts_.has_value()) {
+        nextOutputPts_ = masterStartPts;
+    }
+}
+
 void AudioMixer::pushSystem(AudioBlock block) {
     push(system_, std::move(block));
 }

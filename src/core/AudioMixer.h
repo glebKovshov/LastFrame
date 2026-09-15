@@ -64,6 +64,10 @@ public:
     void setMicrophoneEnabled(bool enabled) noexcept { microphoneEnabled_ = enabled; }
     void setMicrophoneMuted(bool muted) noexcept { microphoneMuted_ = muted; }
 
+    // Starts the shared clock before any source has produced a packet. This
+    // lets the mixer emit silence for an enabled but temporarily idle source.
+    void start(Timestamp masterStartPts = 0) noexcept;
+
     void pushSystem(AudioBlock block);
     void pushMicrophone(AudioBlock block);
 

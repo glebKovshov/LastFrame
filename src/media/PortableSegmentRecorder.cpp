@@ -5,6 +5,7 @@
 #include "platform/MonitorEnumerator.h"
 #if defined(Q_OS_WIN)
 #include "platform/WindowsDesktopCapture.h"
+#include "platform/WindowsAudioCapture.h"
 #endif
 
 #include <QCoreApplication>
@@ -31,7 +32,41 @@ PortableSegmentRecorder::PortableSegmentRecorder(QObject* parent) : QObject(pare
         attemptedNativeCaptureFallback_ = true;
         useNativeCapture_ = false;
         nativeCapture_->stop();
+        if (useNativeAudio_) {
+            nativeAudio_->stop();
+            useNativeAudio_ = false;
+            attemptedNativeAudioFallback_ = true;
+        }
         emit message(QStringLiteral("[capture_failed] Нативный DXGI-захват недоступен; возвращаюсь к FFmpeg backend: %1")
+                         .arg(reason));
+        if (captureProcess_ != nullptr) {
+            QProcess* process = captureProcess_;
+            process->disconnect(this);
+            process->terminate();
+            if (!process->waitForFinished(1000)) {
+                process->kill();
+                process->waitForFinished(1000);
+            }
+            process->deleteLater();
+            captureProcess_ = nullptr;
+        }
+        startProcess(processHasAudio_, false);
+    });
+    nativeAudio_ = std::make_unique<Platform::WindowsAudioCapture>(this);
+    connect(nativeAudio_.get(), &Platform::WindowsAudioCapture::degraded, this, [this](const QString& reason) {
+        emit message(QStringLiteral("[audio_device_lost] Native audio source degraded: %1").arg(reason));
+    });
+    connect(nativeAudio_.get(), &Platform::WindowsAudioCapture::failed, this, [this](const QString& reason) {
+        if (!recording_ || !useNativeAudio_) {
+            return;
+        }
+        attemptedNativeAudioFallback_ = true;
+        useNativeAudio_ = false;
+        nativeAudio_->stop();
+        if (useNativeCapture_) {
+            nativeCapture_->stop();
+        }
+        emit message(QStringLiteral("[audio_device_lost] Native WASAPI недоступен; возвращаюсь к FFmpeg audio backend: %1")
                          .arg(reason));
         if (captureProcess_ != nullptr) {
             QProcess* process = captureProcess_;
@@ -97,8 +132,11 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
     attemptedDesktopDuplicationFallback_ = false;
     useNativeCapture_ = false;
     attemptedNativeCaptureFallback_ = false;
+    useNativeAudio_ = false;
+    attemptedNativeAudioFallback_ = false;
 #if defined(Q_OS_WIN)
     useNativeCapture_ = prepareNativeCapture();
+    useNativeAudio_ = prepareNativeAudio();
 #endif
     useSoftwareEncoder_ = false;
     attemptedEncoderFallback_ = false;
@@ -115,6 +153,9 @@ void PortableSegmentRecorder::pause() {
 #if defined(Q_OS_WIN)
         if (useNativeCapture_) {
             nativeCapture_->stop();
+        }
+        if (useNativeAudio_) {
+            nativeAudio_->stop();
         }
 #endif
         captureProcess_->terminate();
@@ -139,6 +180,7 @@ void PortableSegmentRecorder::resume() {
     discoverMicrophoneDevice();
 #if defined(Q_OS_WIN)
     useNativeCapture_ = !attemptedNativeCaptureFallback_ && prepareNativeCapture();
+    useNativeAudio_ = !attemptedNativeAudioFallback_ && prepareNativeAudio();
 #endif
     startProcess(true);
     emit pausedChanged(false);
@@ -150,6 +192,9 @@ void PortableSegmentRecorder::stop() {
 #if defined(Q_OS_WIN)
     if (nativeCapture_ != nullptr) {
         nativeCapture_->stop();
+    }
+    if (nativeAudio_ != nullptr) {
+        nativeAudio_->stop();
     }
 #endif
     if (captureProcess_ != nullptr) {
@@ -304,8 +349,13 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
         if (useNativeCapture_) {
             nativeCapture_->stop();
         }
+        if (useNativeAudio_) {
+            nativeAudio_->stop();
+            useNativeAudio_ = false;
+            attemptedNativeAudioFallback_ = true;
+        }
 #endif
-        if (captureSystemAudio_) {
+        if (captureSystemAudio_ && !attemptedNativeAudioFallback_) {
             captureSystemAudio_ = false;
             emit message(QStringLiteral("[audio_device_lost] Системный звук недоступен; продолжаю с доступным микрофоном или видео. %1")
                              .arg(processOutput.left(240).simplified()));
@@ -341,6 +391,9 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
 #if defined(Q_OS_WIN)
     if (nativeCapture_ != nullptr) {
         nativeCapture_->stop();
+    }
+    if (nativeAudio_ != nullptr) {
+        nativeAudio_->stop();
     }
 #endif
     segmentTimer_.stop();
@@ -421,12 +474,23 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
              << QStringLiteral("%1x%2").arg(captureRect.width()).arg(captureRect.height()) << QStringLiteral("-i")
              << QStringLiteral("desktop");
     }
-    const bool includeSystemAudio = withAudio && settings_.audio.systemEnabled && captureSystemAudio_;
-    const bool includeMicrophone = withAudio && settings_.audio.microphoneEnabled && !microphoneDeviceName_.isEmpty();
+    const bool includeNativeAudio = withAudio && useNativeAudio_;
+    const bool includeSystemAudio = withAudio && !includeNativeAudio && settings_.audio.systemEnabled && captureSystemAudio_;
+    const bool includeMicrophone = withAudio && !includeNativeAudio && settings_.audio.microphoneEnabled && !microphoneDeviceName_.isEmpty();
     int systemInputIndex = -1;
     int microphoneInputIndex = -1;
+    int nativeAudioInputIndex = -1;
     int nextInputIndex = 1;
-    if (includeSystemAudio) {
+    if (includeNativeAudio) {
+        nativeAudioInputIndex = nextInputIndex++;
+#if defined(Q_OS_WIN)
+        args << QStringLiteral("-thread_queue_size") << QStringLiteral("512")
+             << QStringLiteral("-f") << QStringLiteral("f32le")
+             << QStringLiteral("-ar") << QString::number(settings_.audio.sampleRate)
+             << QStringLiteral("-ac") << QStringLiteral("2") << QStringLiteral("-i")
+             << nativeAudio_->inputPath();
+#endif
+    } else if (includeSystemAudio) {
         systemInputIndex = nextInputIndex++;
         args << QStringLiteral("-thread_queue_size") << QStringLiteral("512")
              << QStringLiteral("-f") << QStringLiteral("wasapi")
@@ -486,7 +550,11 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
     }
     args << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p")
          << QStringLiteral("-force_key_frames") << QStringLiteral("expr:gte(t,n_forced*1)");
-    if (includeSystemAudio && includeMicrophone) {
+    if (includeNativeAudio) {
+        args << QStringLiteral("-map") << QStringLiteral("%1:a:0").arg(nativeAudioInputIndex)
+             << QStringLiteral("-c:a")
+             << (container == QStringLiteral("webm") ? QStringLiteral("libopus") : QStringLiteral("aac"));
+    } else if (includeSystemAudio && includeMicrophone) {
         const QString systemVolume = QString::number(settings_.audio.systemVolume, 'f', 3);
         const QString microphoneVolume = QString::number(settings_.audio.microphoneVolume, 'f', 3);
         args << QStringLiteral("-filter_complex")
@@ -604,6 +672,31 @@ bool PortableSegmentRecorder::prepareNativeCapture() {
 #endif
 }
 
+bool PortableSegmentRecorder::prepareNativeAudio() {
+#if defined(Q_OS_WIN)
+    if (nativeAudio_ == nullptr || (!settings_.audio.systemEnabled && !settings_.audio.microphoneEnabled)) {
+        return false;
+    }
+    Platform::WindowsAudioCapture::Config config;
+    config.systemEnabled = settings_.audio.systemEnabled;
+    config.systemDeviceId = QString::fromStdString(settings_.audio.systemDeviceId);
+    config.microphoneEnabled = settings_.audio.microphoneEnabled;
+    config.microphoneDeviceId = QString::fromStdString(settings_.audio.microphoneDeviceId);
+    config.systemVolume = settings_.audio.systemVolume;
+    config.microphoneVolume = settings_.audio.microphoneVolume;
+    config.sampleRate = settings_.audio.sampleRate;
+    QString errorText;
+    if (!nativeAudio_->prepare(config, &errorText)) {
+        emit message(QStringLiteral("Native WASAPI backend недоступен, использую FFmpeg audio backend: %1")
+                         .arg(errorText));
+        return false;
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
 void PortableSegmentRecorder::discoverMicrophoneDevice() {
     microphoneDeviceName_.clear();
     if (!settings_.audio.microphoneEnabled) {
@@ -626,13 +719,27 @@ void PortableSegmentRecorder::discoverMicrophoneDevice() {
 
 void PortableSegmentRecorder::startProcess(const bool withAudio, const bool announceStarted) {
 #if defined(Q_OS_WIN)
-    if (captureProcess_ != nullptr && useNativeCapture_) {
-        nativeCapture_->stop();
+    if (captureProcess_ != nullptr) {
+        if (useNativeCapture_) {
+            nativeCapture_->stop();
+        }
+        if (useNativeAudio_) {
+            nativeAudio_->stop();
+        }
+    }
+    if (!withAudio) {
+        useNativeAudio_ = false;
     }
     if (useNativeCapture_ && !nativeCapture_->isPrepared()) {
         if (!prepareNativeCapture()) {
             useNativeCapture_ = false;
             attemptedNativeCaptureFallback_ = true;
+        }
+    }
+    if (withAudio && useNativeAudio_ && !nativeAudio_->isPrepared()) {
+        if (!prepareNativeAudio()) {
+            useNativeAudio_ = false;
+            attemptedNativeAudioFallback_ = true;
         }
     }
 #endif
@@ -649,6 +756,16 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
     captureProcess_->start(ffmpegPath_, captureArguments(withAudio));
     if (!captureProcess_->waitForStarted(3000)) {
 #if defined(Q_OS_WIN)
+        if (useNativeAudio_) {
+            nativeAudio_->stop();
+            useNativeAudio_ = false;
+            attemptedNativeAudioFallback_ = true;
+            emit message(QStringLiteral("Native WASAPI backend не запустился; использую FFmpeg audio backend."));
+            captureProcess_->deleteLater();
+            captureProcess_ = nullptr;
+            startProcess(withAudio, announceStarted);
+            return;
+        }
         if (useNativeCapture_) {
             nativeCapture_->stop();
             useNativeCapture_ = false;
@@ -690,6 +807,21 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
         useNativeCapture_ = false;
         attemptedNativeCaptureFallback_ = true;
         emit message(QStringLiteral("Нативный DXGI backend не запустился; использую FFmpeg capture backend."));
+        captureProcess_->terminate();
+        captureProcess_->waitForFinished(1000);
+        captureProcess_->deleteLater();
+        captureProcess_ = nullptr;
+        startProcess(withAudio, announceStarted);
+        return;
+    }
+    if (withAudio && useNativeAudio_ && !nativeAudio_->start()) {
+        nativeAudio_->stop();
+        useNativeAudio_ = false;
+        attemptedNativeAudioFallback_ = true;
+        emit message(QStringLiteral("Native WASAPI backend не запустился; использую FFmpeg audio backend."));
+        if (useNativeCapture_) {
+            nativeCapture_->stop();
+        }
         captureProcess_->terminate();
         captureProcess_->waitForFinished(1000);
         captureProcess_->deleteLater();
