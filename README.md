@@ -40,6 +40,9 @@ Portable Windows ZIP собирается воспроизводимым скр�
 .\packaging\windows-portable.ps1 -QtRoot C:\Qt\6.8.3\msvc2022_64 -FfmpegBin C:\path\to\ffmpeg\bin
 ```
 
+Установщик Windows создаётся в GitHub Actions через Inno Setup. Для локальной
+проверки используйте portable-папку: `out\LastFrameRelease\LastFrame.exe`.
+
 ## MVP
 
 В MVP входят:
@@ -83,7 +86,7 @@ Native Windows DXGI Desktop Duplication уже подключён через D3D
 
 ## Публикация
 
-Установщик не создаётся. Release-артефакты должны быть portable ZIP через [GitHub Releases](https://github.com/glebKovshov/LastFrame/releases). Проверка обновлений — ручная и выключена по умолчанию; endpoint — `https://api.github.com/repos/glebKovshov/LastFrame/releases/latest`.
+Release-артефакты публикуются через [GitHub Releases](https://github.com/glebKovshov/LastFrame/releases): portable ZIP и Windows installer EXE. Проверка обновлений — ручная и выключена по умолчанию; endpoint — `https://api.github.com/repos/glebKovshov/LastFrame/releases/latest`.
 
 ## Документация
 

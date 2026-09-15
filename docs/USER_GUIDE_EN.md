@@ -2,7 +2,7 @@
 
 ## Start
 
-Extract `LastFrame-windows-x64-portable.zip` to a writable directory and run `LastFrame.exe`. No installer is required. The portable archive includes FFmpeg and the Qt runtime.
+For the portable build, extract `LastFrame-windows-x64-portable.zip` to a writable directory and run `LastFrame.exe`. The installer build can be launched directly. The portable archive includes FFmpeg and the Qt runtime.
 
 The window can be closed to keep LastFrame in the system tray. The buffer is not started automatically: press “Начать буфер” in the current MVP UI.
 

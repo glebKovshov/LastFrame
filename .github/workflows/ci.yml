@@ -48,6 +48,10 @@ jobs:
         shell: pwsh
         run: choco install ffmpeg --no-progress --yes
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress --yes
+
       - name: Set up Python for Qt installer
         uses: actions/setup-python@v6
         id: qt-python
@@ -120,12 +124,22 @@ jobs:
           Copy-Item LICENSE $package
           Copy-Item THIRD_PARTY_NOTICES.md $package
           Compress-Archive -Path (Join-Path $package '*') -DestinationPath LastFrame-windows-x64-portable.zip -Force
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            throw "Inno Setup compiler not found: $iscc"
+          }
+          & $iscc "/DMyAppVersion=0.1.6" "/DSourceDir=$package" "/DOutputDir=$PWD" "$PWD\packaging\windows-installer.iss"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE"
+          }
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v4
         with:
           name: LastFrame-windows-x64-portable
-          path: LastFrame-windows-x64-portable.zip
+          path: |
+            LastFrame-windows-x64-portable.zip
+            LastFrame-windows-x64-installer.exe
 
   github-release:
     name: Publish GitHub Release
@@ -135,7 +149,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download portable artifact
+      - name: Download Windows release artifacts
         uses: actions/download-artifact@v4
         with:
           name: LastFrame-windows-x64-portable
@@ -143,7 +157,7 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" LastFrame-windows-x64-portable.zip --repo "${{ github.repository }}" --title "LastFrame ${{ github.ref_name }}" --generate-notes
+        run: gh release create "${{ github.ref_name }}" LastFrame-windows-x64-portable.zip LastFrame-windows-x64-installer.exe --repo "${{ github.repository }}" --title "LastFrame ${{ github.ref_name }}" --generate-notes
 
   macos-ui:
     name: macOS arm64 UI build

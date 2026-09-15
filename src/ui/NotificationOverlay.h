@@ -29,13 +29,11 @@ protected:
     void hideEvent(QHideEvent* event) override;
 
 private:
-    QTimer animationTimer_;
     QTimer hideTimer_;
     QString text_;
     QRect monitorGeometry_;
     QString corner_ = QStringLiteral("top_right");
     bool error_ = false;
-    int animationAngle_ = 0;
 
     void reposition();
 };

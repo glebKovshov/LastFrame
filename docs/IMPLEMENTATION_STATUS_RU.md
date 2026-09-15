@@ -104,7 +104,7 @@
 - Геометрия монитора разделена на логическую Qt-координатную систему и физические
   пиксели native capture; custom region масштабируется по фактическому DPI/размеру
   дисплея перед DXGI/WGC/FFmpeg. Региональный smoke повторён с `QT_SCALE_FACTOR=1.5`.
-- GitHub Actions для core tests и Windows portable artifact.
+- GitHub Actions для core tests, Windows portable artifact и Windows installer EXE.
 - GitHub Actions дополнительно компилирует Qt UI на `macos-14` arm64,
   включая Carbon hotkey integration; runtime capture smoke macOS пока не заявляется.
 

@@ -5,6 +5,13 @@
 - Version diagnostics now use the CMake project version, and every FFmpeg
   restart re-validates WASAPI before constructing the audio command line.
 
+## 0.1.6 — UI polish and installer
+
+- Added a Windows x64 installer build to GitHub Releases alongside the portable ZIP.
+- Fixed the tray icon rendering and added hover feedback to tray menu items.
+- Simplified UI copy, tightened card spacing, and added clearer borders and dropdown styling.
+- Removed the animated loading mark from corner notifications; all four corner positions remain available.
+
 ## 0.1.5 — FFmpeg fallback hardening
 
 - Prevented native-audio recovery from retrying unsupported FFmpeg WASAPI

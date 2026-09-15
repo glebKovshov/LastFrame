@@ -18,14 +18,8 @@ NotificationOverlay::NotificationOverlay(QWidget* parent) : QWidget(parent) {
     setAttribute(Qt::WA_ShowWithoutActivating);
     setAttribute(Qt::WA_TransparentForMouseEvents);
     setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus);
-    setFixedSize(360, 82);
-    animationTimer_.setInterval(80);
-    animationTimer_.setSingleShot(false);
+    setFixedSize(380, 76);
     hideTimer_.setSingleShot(true);
-    connect(&animationTimer_, &QTimer::timeout, this, [this] {
-        animationAngle_ = (animationAngle_ + 24) % 360;
-        update();
-    });
     connect(&hideTimer_, &QTimer::timeout, this, &NotificationOverlay::hide);
 }
 
@@ -36,7 +30,6 @@ void NotificationOverlay::showMessage(const QString& text, const bool error, con
     hideTimer_.start(std::max(500, durationMs));
     show();
     raise();
-    animationTimer_.start();
     update();
 }
 
@@ -63,7 +56,7 @@ void NotificationOverlay::reposition() {
     if (monitorGeometry_.isEmpty()) {
         return;
     }
-    constexpr int margin = 24;
+    constexpr int margin = 20;
     const bool left = corner_ == QStringLiteral("top_left") || corner_ == QStringLiteral("bottom_left");
     const bool bottom = corner_ == QStringLiteral("bottom_left") || corner_ == QStringLiteral("bottom_right");
     const int x = left ? monitorGeometry_.left() + margin : monitorGeometry_.right() - width() - margin;
@@ -80,16 +73,14 @@ void NotificationOverlay::paintEvent(QPaintEvent* event) {
     painter.setBrush(QColor(QStringLiteral("#242424E6")));
     painter.drawRoundedRect(panel, 12, 12);
 
-    const QPoint center(27, height() / 2);
-    painter.setPen(QPen(QColor(QStringLiteral("#6E6E6E")), 4, Qt::SolidLine, Qt::RoundCap));
-    painter.drawArc(QRect(center.x() - 11, center.y() - 11, 22, 22), 0, 360 * 16);
-    painter.setPen(QPen(error_ ? QColor(QStringLiteral("#D94841")) : QColor(QStringLiteral("#ED760E")),
-                       4, Qt::SolidLine, Qt::RoundCap));
-    painter.drawArc(QRect(center.x() - 11, center.y() - 11, 22, 22), animationAngle_ * 16, 105 * 16);
+    const QColor marker = error_ ? QColor(QStringLiteral("#D94841")) : QColor(QStringLiteral("#ED760E"));
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(marker);
+    painter.drawEllipse(QPointF(20, height() / 2.0), 5, 5);
 
     painter.setPen(Qt::white);
     painter.setFont(QFont(QStringLiteral("Segoe UI"), 10));
-    painter.drawText(QRect(52, 13, width() - 66, height() - 26), Qt::AlignVCenter | Qt::TextWordWrap, text_);
+    painter.drawText(QRect(38, 10, width() - 52, height() - 20), Qt::AlignVCenter | Qt::TextWordWrap, text_);
 }
 
 void NotificationOverlay::showEvent(QShowEvent* event) {
@@ -101,7 +92,6 @@ void NotificationOverlay::showEvent(QShowEvent* event) {
 }
 
 void NotificationOverlay::hideEvent(QHideEvent* event) {
-    animationTimer_.stop();
     QWidget::hideEvent(event);
 }
 

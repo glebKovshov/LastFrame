@@ -2,7 +2,7 @@
 
 ## Запуск
 
-Распакуйте `LastFrame-windows-x64-portable.zip` в каталог без ограничений на запись и запустите `LastFrame.exe`. Установщик не требуется. Рядом с программой должны находиться `ffmpeg.exe`, его DLL и Qt runtime, входящие в portable ZIP.
+Для portable-версии распакуйте `LastFrame-windows-x64-portable.zip` в каталог без ограничений на запись и запустите `LastFrame.exe`. В installer-версии достаточно запустить установщик. Portable ZIP уже содержит `ffmpeg.exe`, его DLL и Qt runtime.
 
 После запуска окно можно закрыть — LastFrame останется в системном трее. Буфер не запускается автоматически: нажмите «Начать буфер».
 
