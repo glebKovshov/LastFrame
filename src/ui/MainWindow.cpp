@@ -670,6 +670,11 @@ QWidget* MainWindow::buildAdvancedPage() {
                                                     ? QStringLiteral("color: #D94841;") : QString());
         }
     });
+    ramLimitSpin_ = new QSpinBox(page);
+    ramLimitSpin_->setRange(64, 16384);
+    ramLimitSpin_->setSuffix(QStringLiteral(" MiB"));
+    ramLimitSpin_->setValue(settings_.buffer.ramLimitMiB);
+    form->addRow(QStringLiteral("RAM limit"), ramLimitSpin_);
     themeCombo_ = new QComboBox(page);
     themeCombo_->addItems({QStringLiteral("Тёмная"), QStringLiteral("Светлая")});
     themeCombo_->setCurrentIndex(settings_.extras.value("theme", std::string("dark")) == "light" ? 1 : 0);
@@ -685,6 +690,8 @@ QWidget* MainWindow::buildAdvancedPage() {
     layout->addWidget(description(QStringLiteral("Телеметрия отключена. Проверка обновлений будет ручной через GitHub Releases и по умолчанию отключена."), page));
     layout->addStretch();
     connect(themeCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::chooseTheme);
+    connect(ramLimitSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this](int value) { settings_.buffer.ramLimitMiB = value; });
     connect(updateButton_, &QPushButton::clicked, this, &MainWindow::checkForUpdates);
     connect(diagnosticsButton_, &QPushButton::clicked, this, &MainWindow::copyDiagnostics);
     return page;

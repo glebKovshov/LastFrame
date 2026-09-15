@@ -47,6 +47,8 @@
   Нативные macOS ScreenCaptureKit и Linux PipeWire/portal остаются отдельными backend'ами.
 - Windows DisplayConfig определяет активный HDR-монитор, список его помечает
   `HDR → SDR`, а UI явно предупреждает о потере HDR-диапазона; DRM не обходится.
+- `RAM limit` вынесен в Advanced и сохраняется в JSON; portable recorder остаётся
+  disk-spillover backend'ом с bounded segment cleanup, native RAM ring — отдельный slice.
 - Ошибки recorder/hotkey/update имеют стабильные технические коды для диагностики:
   `capture_failed`, `audio_device_lost`, `encoder_unavailable`, `export_failed`,
   `queue_overflow`, `hotkey_conflict`, `monitor_changed`.

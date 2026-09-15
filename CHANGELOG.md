@@ -45,6 +45,8 @@
 - Extended core settings coverage for all supported H.264 backend identifiers.
 - Added Windows DisplayConfig HDR capability detection and an explicit HDR → SDR
   warning in the Capture UI; protected surfaces remain OS-controlled.
+- Exposed the persisted RAM limit in Advanced so the portable disk-spillover
+  policy is visible and adjustable instead of silently using a hidden default.
 - Added a hardware smoke override (`LASTFRAME_FORCE_WGC=1`) used to validate the
   Windows Graphics Capture path end-to-end on the development machine.
 

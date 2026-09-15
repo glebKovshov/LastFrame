@@ -105,6 +105,7 @@ private:
     QComboBox* sourceCombo_ = nullptr;
     QPushButton* regionButton_ = nullptr;
     QSpinBox* durationSpin_ = nullptr;
+    QSpinBox* ramLimitSpin_ = nullptr;
     QSpinBox* fpsSpin_ = nullptr;
     QSpinBox* outputWidthSpin_ = nullptr;
     QSpinBox* outputHeightSpin_ = nullptr;
