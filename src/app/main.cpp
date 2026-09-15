@@ -9,7 +9,9 @@ int main(int argc, char* argv[]) {
     QApplication application(argc, argv);
     application.setApplicationName(QStringLiteral("LastFrame"));
     application.setOrganizationName(QStringLiteral("LastFrame"));
-    application.setApplicationVersion(QStringLiteral("0.1.0"));
+    application.setApplicationVersion(QStringLiteral("%1.%2.%3").arg(LASTFRAME_VERSION_MAJOR)
+                                          .arg(LASTFRAME_VERSION_MINOR)
+                                          .arg(LASTFRAME_VERSION_PATCH));
     application.setWindowIcon(QIcon(QStringLiteral(":/branding/lastframe-icon.png")));
     QApplication::setQuitOnLastWindowClosed(false);
 

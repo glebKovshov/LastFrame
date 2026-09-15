@@ -209,10 +209,6 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
         useWindowsGraphicsCapture_ = prepareWindowsGraphicsCapture();
     }
     useNativeAudio_ = prepareNativeAudio();
-    if (!useNativeAudio_ && captureSystemAudio_ && !ffmpegSupportsInputFormat(QStringLiteral("wasapi"))) {
-        captureSystemAudio_ = false;
-        emit message(QStringLiteral("[audio_device_lost] Текущий FFmpeg собран без WASAPI; системный звук отключён, продолжаю с микрофоном или видео."));
-    }
 #endif
     useSoftwareEncoder_ = false;
     attemptedEncoderFallback_ = false;
@@ -668,6 +664,17 @@ bool PortableSegmentRecorder::ffmpegSupportsInputFormat(const QString& format) c
     const QRegularExpression formatLine(
         QStringLiteral("(?m)^\\s*D\\s+(?:d\\s+)?%1(?:\\s|$)").arg(QRegularExpression::escape(format)));
     return formatLine.match(QString::fromLocal8Bit(probe.readAll())).hasMatch();
+}
+
+void PortableSegmentRecorder::disableUnsupportedFfmpegSystemAudio() {
+#if defined(Q_OS_WIN)
+    if (!captureSystemAudio_ || useNativeAudio_ || !settings_.audio.systemEnabled ||
+        ffmpegSupportsInputFormat(QStringLiteral("wasapi"))) {
+        return;
+    }
+    captureSystemAudio_ = false;
+    emit message(QStringLiteral("[audio_device_lost] Текущий FFmpeg собран без WASAPI; системный звук отключён, продолжаю с микрофоном или видео."));
+#endif
 }
 
 QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) {
@@ -1280,6 +1287,10 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
         }
     }
 #endif
+    // Native audio may have been lost after the initial start. Re-check the
+    // portable backend immediately before every FFmpeg launch so a build
+    // without WASAPI can never receive the unsupported -loopback option.
+    disableUnsupportedFfmpegSystemAudio();
     stopCaptureProcess(1500);
     processHasAudio_ = withAudio;
     captureProcess_ = new QProcess(this);

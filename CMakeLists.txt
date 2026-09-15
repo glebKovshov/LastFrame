@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 
 project(LastFrame
-    VERSION 0.1.0
+    VERSION 0.1.5
     DESCRIPTION "Local instant replay recorder"
     LANGUAGES CXX
 )

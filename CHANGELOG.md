@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Version diagnostics now use the CMake project version, and every FFmpeg
+  restart re-validates WASAPI before constructing the audio command line.
+
+## 0.1.5 — FFmpeg fallback hardening
+
+- Prevented native-audio recovery from retrying unsupported FFmpeg WASAPI
+  loopback input on Windows; recording continues with microphone or video.
+- Diagnostics now report the actual application version instead of a stale
+  hardcoded value.
+
+## 0.1.4 — Portable FFmpeg hardening
+
 - Validate the resolved FFmpeg executable before capture and skip the
   unsupported WASAPI loopback fallback when the selected FFmpeg has no
   `wasapi` input format; diagnostics now include the full FFmpeg path.

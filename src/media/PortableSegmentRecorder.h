@@ -75,6 +75,7 @@ private:
 
     [[nodiscard]] QString locateFfmpeg() const;
     [[nodiscard]] bool ffmpegSupportsInputFormat(const QString& format) const;
+    void disableUnsupportedFfmpegSystemAudio();
     [[nodiscard]] QStringList captureArguments(bool withAudio);
     [[nodiscard]] QStringList segmentFiles() const;
     [[nodiscard]] int nextSegmentNumber() const;
