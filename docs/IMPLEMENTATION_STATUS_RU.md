@@ -73,18 +73,18 @@
   `WDA_EXCLUDEFROMCAPTURE`, настройки сохраняются в JSON.
 - GitHub Actions для core tests и Windows portable artifact.
 
-## Следующие обязательные срезы по ТЗ
+## Оставшиеся обязательные срезы по ТЗ
 
-1. Проверка на конкретных capture backend'ах, что исключение overlay действительно
-   соблюдается, затем HDR/DRM сценарии и явные capability/error states для недоступных или
-   защищённых поверхностей; отдельная проверка SDR-конверсии HDR.
-2. Device-loss recovery с попытками переподключения и auto-resume; текущий
+1. Интеграционная проверка на конкретных capture backend'ах, что исключение
+   overlay действительно соблюдается, и тесты DRM/HDR capability states.
+2. Device-loss recovery с попытками переподключения и backoff; текущий
    native WASAPI path уже передаёт mixed PCM в encoder, имеет silence-fill,
    fallback на portable FFmpeg audio и runtime mute/unmute microphone через
    global hotkey и tray action.
 3. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
-4. Region selector, DPI-aware coordinates, monitor watcher и overlay.
-5. Интеграционные тесты на RTX 3070 и матрица Windows/Linux/macOS arm64.
+4. Завершить DPI-specific validation для high-DPI monitor geometry и native
+   macOS ScreenCaptureKit/Linux PipeWire/portal backends.
+5. Интеграционные тесты на RTX 3070 и полная матрица Windows/Linux/macOS arm64.
 
 До реализации следующих срезов UI честно показывает, что segment recorder
 требует доступный FFmpeg; native DXGI/WGC и native WASAPI capability включаются
