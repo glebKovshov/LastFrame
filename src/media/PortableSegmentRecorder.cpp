@@ -121,6 +121,8 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
         return;
     }
     const QDir directory(segmentDirectory_);
+    ramSegments_.clear();
+    ramSegmentBytes_ = 0;
     for (const QFileInfo& file : directory.entryInfoList({QStringLiteral("segment_*.mkv"),
                                                            QStringLiteral("concat-*.txt"),
                                                            QStringLiteral("*.tmp")},
@@ -251,10 +253,11 @@ void PortableSegmentRecorder::clearBuffer() {
     if (segmentDirectory_.isEmpty()) {
         return;
     }
-    const QDir directory(segmentDirectory_);
-    for (const QFileInfo& file : directory.entryInfoList({QStringLiteral("segment_*.mkv")}, QDir::Files)) {
-        QFile::remove(file.absoluteFilePath());
+    for (const QString& file : segmentFiles()) {
+        QFile::remove(file);
     }
+    ramSegments_.clear();
+    ramSegmentBytes_ = 0;
     emit message(QStringLiteral("Буфер очищен; сохранённые клипы не затронуты."));
 }
 
@@ -277,6 +280,11 @@ void PortableSegmentRecorder::saveClip() {
     }
     if (exports_.size() >= settings_.storage.maxQueueLength) {
         emit error(QStringLiteral("[queue_overflow] Очередь экспорта заполнена. Дождитесь завершения предыдущих клипов."));
+        return;
+    }
+
+    if (!materializeRamSegments()) {
+        emit error(QStringLiteral("[export_failed] Не удалось подготовить RAM-сегменты для экспорта."));
         return;
     }
 
@@ -402,12 +410,8 @@ void PortableSegmentRecorder::setMicrophoneMuted(const bool muted) {
 }
 
 void PortableSegmentRecorder::reapSegments() {
-    const QStringList files = segmentFiles();
-    const int keepCount = std::max(3, settings_.buffer.durationSeconds + 2);
-    QDir directory(segmentDirectory_);
-    for (int index = 0; index < files.size() - keepCount; ++index) {
-        QFile::remove(files.at(index));
-    }
+    promoteClosedSegmentsToRam();
+    evictOldSegments();
 }
 
 void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess::ExitStatus status) {
@@ -725,7 +729,72 @@ QStringList PortableSegmentRecorder::segmentFiles() const {
                                                          QDir::Name)) {
         files.push_back(info.absoluteFilePath());
     }
+    for (auto it = ramSegments_.cbegin(); it != ramSegments_.cend(); ++it) {
+        files.push_back(it.key());
+    }
+    files.removeDuplicates();
+    std::sort(files.begin(), files.end());
     return files;
+}
+
+bool PortableSegmentRecorder::materializeRamSegments() {
+    for (auto it = ramSegments_.cbegin(); it != ramSegments_.cend(); ++it) {
+        if (QFileInfo::exists(it.key())) {
+            continue;
+        }
+        QFile file(it.key());
+        if (!file.open(QIODevice::WriteOnly) || file.write(it.value()) != it.value().size()) {
+            file.close();
+            return false;
+        }
+        file.close();
+    }
+    return true;
+}
+
+void PortableSegmentRecorder::promoteClosedSegmentsToRam() {
+    if (!recording_ || !exports_.isEmpty() || segmentDirectory_.isEmpty()) {
+        return;
+    }
+    const QStringList files = segmentFiles();
+    if (files.size() < 2) {
+        return;
+    }
+    const qint64 softLimit = std::max<qint64>(1, static_cast<qint64>(settings_.buffer.ramLimitMiB) * 1024 * 1024 * 70 / 100);
+    for (int index = files.size() - 2; index >= 0; --index) {
+        const QString& path = files.at(index);
+        if (ramSegments_.contains(path)) {
+            continue;
+        }
+        QFile file(path);
+        const qint64 size = QFileInfo(path).size();
+        if (size <= 0 || ramSegmentBytes_ + size > softLimit || !file.open(QIODevice::ReadOnly)) {
+            continue;
+        }
+        const QByteArray data = file.readAll();
+        file.close();
+        if (data.size() != size) {
+            continue;
+        }
+        ramSegments_.insert(path, data);
+        ramSegmentBytes_ += data.size();
+        QFile::remove(path);
+    }
+}
+
+void PortableSegmentRecorder::evictOldSegments() {
+    const QStringList files = segmentFiles();
+    const int keepCount = std::max(3, settings_.buffer.durationSeconds + 2);
+    const int removeCount = files.size() > keepCount ? static_cast<int>(files.size()) - keepCount : 0;
+    for (int index = 0; index < removeCount; ++index) {
+        const QString& path = files.at(index);
+        const auto cached = ramSegments_.find(path);
+        if (cached != ramSegments_.end()) {
+            ramSegmentBytes_ -= cached.value().size();
+            ramSegments_.erase(cached);
+        }
+        QFile::remove(path);
+    }
 }
 
 int PortableSegmentRecorder::nextSegmentNumber() const {

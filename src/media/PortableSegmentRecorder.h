@@ -4,7 +4,9 @@
 #include "core/Settings.h"
 
 #include <QProcess>
+#include <QByteArray>
 #include <QList>
+#include <QMap>
 #include <QTimer>
 
 #include <chrono>
@@ -71,6 +73,7 @@ private:
     [[nodiscard]] int nextSegmentNumber() const;
     [[nodiscard]] QString escapeConcatPath(const QString& path) const;
     [[nodiscard]] QString selectedMonitorLabel() const;
+    [[nodiscard]] bool materializeRamSegments();
     [[nodiscard]] bool prepareNativeCapture();
     [[nodiscard]] bool prepareWindowsGraphicsCapture();
     [[nodiscard]] bool prepareNativeAudio();
@@ -78,6 +81,8 @@ private:
     [[nodiscard]] bool tryNextAutomaticEncoder();
     void recoverNativeCapture(const QString& reason);
     void recoverNativeAudio(const QString& reason);
+    void promoteClosedSegmentsToRam();
+    void evictOldSegments();
     void startProcess(bool withAudio, bool announceStarted = true);
     void finishExport(ExportJob* job, int exitCode, QProcess::ExitStatus status);
 
@@ -106,6 +111,8 @@ private:
     bool useSoftwareEncoder_ = false;
     bool attemptedEncoderFallback_ = false;
     int automaticEncoderAttempt_ = 0;
+    QMap<QString, QByteArray> ramSegments_;
+    qint64 ramSegmentBytes_ = 0;
     LastFrame::Core::RateLimiter rateLimiter_{3, std::chrono::seconds(1), std::chrono::seconds(5)};
     QList<ExportJob*> exports_;
 #if defined(Q_OS_WIN)
