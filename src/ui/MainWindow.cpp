@@ -82,7 +82,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupTray();
     registerHotkeys();
     refreshMonitors();
-    applyTheme(true);
+    applyTheme(settings_.extras.value("theme", std::string("dark")) != "light");
 
     connect(&recorder_, &Media::PortableSegmentRecorder::started, this, [this] {
         showToast(QStringLiteral("Буфер запущен"));
@@ -542,6 +542,7 @@ QWidget* MainWindow::buildAdvancedPage() {
     form->addRow(QStringLiteral("Длина буфера"), durationSpin_);
     themeCombo_ = new QComboBox(page);
     themeCombo_->addItems({QStringLiteral("Тёмная"), QStringLiteral("Светлая")});
+    themeCombo_->setCurrentIndex(settings_.extras.value("theme", std::string("dark")) == "light" ? 1 : 0);
     form->addRow(QStringLiteral("Тема"), themeCombo_);
     layout->addLayout(form);
     ffmpegLabel_ = new QLabel(QStringLiteral("FFmpeg: проверка capability…"), page);
@@ -716,6 +717,7 @@ void MainWindow::refreshMonitors() {
 }
 
 void MainWindow::chooseTheme(const int index) {
+    settings_.extras["theme"] = index == 0 ? "dark" : "light";
     applyTheme(index == 0);
 }
 
