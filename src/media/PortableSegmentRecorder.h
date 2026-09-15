@@ -8,6 +8,7 @@
 #include <QList>
 #include <QMap>
 #include <QFutureWatcher>
+#include <QHash>
 #include <QTimer>
 
 #include <chrono>
@@ -86,6 +87,8 @@ private:
     void recoverNativeAudio(const QString& reason);
     void promoteClosedSegmentsToRam();
     void evictOldSegments();
+    void retainSnapshot(const QStringList& files);
+    void releaseSnapshot(const QStringList& files);
     void startProcess(bool withAudio, bool announceStarted = true);
     void beginExport(ExportJob* job);
     void finishExport(ExportJob* job, int exitCode, QProcess::ExitStatus status);
@@ -117,6 +120,7 @@ private:
     int automaticEncoderAttempt_ = 0;
     QMap<QString, QByteArray> ramSegments_;
     qint64 ramSegmentBytes_ = 0;
+    QHash<QString, int> snapshotReferences_;
     LastFrame::Core::RateLimiter rateLimiter_{3, std::chrono::seconds(1), std::chrono::seconds(5)};
     QList<ExportJob*> exports_;
 #if defined(Q_OS_WIN)

@@ -50,6 +50,8 @@
 - `RAM limit` вынесен в Advanced и сохраняется в JSON; завершённые portable-сегменты
   удерживаются в RAM до мягкого порога 70%, после чего остаются в локальном временном
   каталоге как disk spillover. Перед export RAM-сегменты материализуются без остановки capture.
+- Snapshot экспортов удерживает reference-count на исходные сегменты; очистка буфера во время экспорта
+  не удаляет их и не затрагивает текущий незакрытый writer-сегмент.
 - Ошибки recorder/hotkey/update имеют стабильные технические коды для диагностики:
   `capture_failed`, `audio_device_lost`, `encoder_unavailable`, `export_failed`,
   `queue_overflow`, `hotkey_conflict`, `monitor_changed`.

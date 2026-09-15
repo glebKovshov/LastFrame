@@ -147,13 +147,21 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
         return;
     }
     const QDir directory(segmentDirectory_);
-    ramSegments_.clear();
-    ramSegmentBytes_ = 0;
+    for (auto it = ramSegments_.begin(); it != ramSegments_.end();) {
+        if (snapshotReferences_.contains(it.key())) {
+            ++it;
+        } else {
+            ramSegmentBytes_ -= it.value().size();
+            it = ramSegments_.erase(it);
+        }
+    }
     for (const QFileInfo& file : directory.entryInfoList({QStringLiteral("segment_*.mkv"),
                                                            QStringLiteral("concat-*.txt"),
                                                            QStringLiteral("*.tmp")},
-                                                          QDir::Files)) {
-        QFile::remove(file.absoluteFilePath());
+                                                           QDir::Files)) {
+        if (!snapshotReferences_.contains(file.absoluteFilePath())) {
+            QFile::remove(file.absoluteFilePath());
+        }
     }
     attemptedVideoOnlyFallback_ = false;
     captureSystemAudio_ = settings_.audio.systemEnabled;
@@ -279,11 +287,23 @@ void PortableSegmentRecorder::clearBuffer() {
     if (segmentDirectory_.isEmpty()) {
         return;
     }
-    for (const QString& file : segmentFiles()) {
-        QFile::remove(file);
+    const QStringList files = segmentFiles();
+    const int removableCount = recording_ && !files.isEmpty() ? static_cast<int>(files.size()) - 1
+                                                               : static_cast<int>(files.size());
+    for (int index = 0; index < removableCount; ++index) {
+        const QString& file = files.at(index);
+        if (!snapshotReferences_.contains(file)) {
+            QFile::remove(file);
+        }
     }
-    ramSegments_.clear();
-    ramSegmentBytes_ = 0;
+    for (auto it = ramSegments_.begin(); it != ramSegments_.end();) {
+        if (snapshotReferences_.contains(it.key())) {
+            ++it;
+        } else {
+            ramSegmentBytes_ -= it.value().size();
+            it = ramSegments_.erase(it);
+        }
+    }
     emit message(QStringLiteral("Буфер очищен; сохранённые клипы не затронуты."));
 }
 
@@ -343,6 +363,7 @@ void PortableSegmentRecorder::saveClip() {
     job->finalPath = finalPath;
     job->container = container;
     job->snapshotFiles = files;
+    retainSnapshot(job->snapshotFiles);
     QFile::remove(job->temporaryPath);
     exports_.push_back(job);
 
@@ -364,6 +385,7 @@ void PortableSegmentRecorder::saveClip() {
             if (!success) {
                 QFile::remove(job->temporaryPath);
                 QFile::remove(job->finalPath);
+                releaseSnapshot(job->snapshotFiles);
                 exports_.removeOne(job);
                 delete job;
                 emit error(QStringLiteral("[export_failed] Не удалось подготовить RAM-сегменты для экспорта."));
@@ -386,6 +408,7 @@ void PortableSegmentRecorder::beginExport(ExportJob* job) {
     listFile->setAutoRemove(false);
     if (!listFile->open()) {
         QFile::remove(job->finalPath);
+        releaseSnapshot(job->snapshotFiles);
         exports_.removeOne(job);
         listFile->deleteLater();
         delete job;
@@ -405,6 +428,7 @@ void PortableSegmentRecorder::beginExport(ExportJob* job) {
         listFile->remove();
         listFile->deleteLater();
         QFile::remove(job->finalPath);
+        releaseSnapshot(job->snapshotFiles);
         exports_.removeOne(job);
         delete job;
         emit error(QStringLiteral("[export_failed] Не удалось записать список сегментов для экспорта."));
@@ -798,8 +822,11 @@ QStringList PortableSegmentRecorder::segmentFiles() const {
                                                          QDir::Name)) {
         files.push_back(info.absoluteFilePath());
     }
+    const QString currentDirectory = QDir(segmentDirectory_).absolutePath();
     for (auto it = ramSegments_.cbegin(); it != ramSegments_.cend(); ++it) {
-        files.push_back(it.key());
+        if (QFileInfo(it.key()).absolutePath() == currentDirectory) {
+            files.push_back(it.key());
+        }
     }
     files.removeDuplicates();
     std::sort(files.begin(), files.end());
@@ -848,12 +875,33 @@ void PortableSegmentRecorder::evictOldSegments() {
     const int removeCount = files.size() > keepCount ? static_cast<int>(files.size()) - keepCount : 0;
     for (int index = 0; index < removeCount; ++index) {
         const QString& path = files.at(index);
+        if (snapshotReferences_.contains(path)) {
+            continue;
+        }
         const auto cached = ramSegments_.find(path);
         if (cached != ramSegments_.end()) {
             ramSegmentBytes_ -= cached.value().size();
             ramSegments_.erase(cached);
         }
         QFile::remove(path);
+    }
+}
+
+void PortableSegmentRecorder::retainSnapshot(const QStringList& files) {
+    for (const QString& file : files) {
+        ++snapshotReferences_[file];
+    }
+}
+
+void PortableSegmentRecorder::releaseSnapshot(const QStringList& files) {
+    for (const QString& file : files) {
+        const auto it = snapshotReferences_.find(file);
+        if (it == snapshotReferences_.end()) {
+            continue;
+        }
+        if (--it.value() <= 0) {
+            snapshotReferences_.erase(it);
+        }
     }
 }
 
@@ -1339,6 +1387,7 @@ void PortableSegmentRecorder::finishExport(ExportJob* job, const int exitCode,
     if (job->process != nullptr) {
         job->process->deleteLater();
     }
+    releaseSnapshot(job->snapshotFiles);
     exports_.removeOne(job);
     delete job;
 }

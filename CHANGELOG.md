@@ -6,6 +6,8 @@
   disk spillover and export-time materialization without stopping capture.
 - RAM-segment materialization now runs on a bounded QtConcurrent worker path,
   keeping Save hotkeys and the UI thread free from large synchronous writes.
+- Export snapshots retain their source segments until completion; concurrent
+  clear-buffer actions cannot delete an active snapshot or the current writer file.
 - Added notification language, corner, duration and opacity settings with JSON validation.
 - Added local clip-directory selection, temporary-segment visibility, log opening and
   tray/Storage actions for opening the clips directory.
