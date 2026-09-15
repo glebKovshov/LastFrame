@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added hybrid RAM retention for completed segments with a 70% soft limit,
+  disk spillover and export-time materialization without stopping capture.
+- Added notification language, corner, duration and opacity settings with JSON validation.
+- Added local clip-directory selection, temporary-segment visibility, log opening and
+  tray/Storage actions for opening the clips directory.
+- Added state-colored tray icon: gray idle, green recording, yellow paused/warning,
+  red error.
 - Added region selection overlay with monitor-bounded coordinates.
 - Added output resolution, container, codec, preset, bitrate and file-size controls.
 - Added export queue limits, unique reservations for concurrent clips and stale-temp cleanup.

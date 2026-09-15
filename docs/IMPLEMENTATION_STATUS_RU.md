@@ -81,6 +81,8 @@
   `WDA_EXCLUDEFROMCAPTURE`, настройки сохраняются в JSON.
 - Страница Storage позволяет выбрать каталог клипов и блокирует read-only, сетевые
   и съёмные носители; Capture предлагает Native, 720p, 1080p, 1440p, 4K и Custom.
+- Иконка системного трея меняет цвет по состоянию: серый idle, зелёный recording,
+  жёлтый paused/warning, красный error; из трея и Storage доступно открытие каталога клипов.
 - GitHub Actions для core tests и Windows portable artifact.
 
 ## Оставшиеся обязательные срезы по ТЗ

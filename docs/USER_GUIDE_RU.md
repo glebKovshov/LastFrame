@@ -29,10 +29,12 @@
 
 ## Аудио и ограничения MVP
 
-На странице Audio можно выбрать найденный микрофон и отдельно настроить громкость system/mic. Windows backend использует native DXGI Desktop Duplication через D3D11, затем Windows Graphics Capture, затем FFmpeg `ddagrab`, а при недоступности API — GDI fallback. Native WASAPI loopback и microphone capture сводятся через общий master-clock `AudioMixer` в одну 48 kHz stereo дорожку; при потере источника приложение показывает `[audio_device_lost]` и продолжает с доступным источником или fallback FFmpeg. Mute/unmute микрофона доступен через заданный global hotkey и пункт tray. Device-loss recovery с автоматическим resume, HDR/DRM capability states, Linux/macOS native capture и прямые FFmpeg libraries входят в последующие срезы.
+На странице Audio можно выбрать найденный микрофон и отдельно настроить громкость system/mic. Windows backend использует native DXGI Desktop Duplication через D3D11, затем Windows Graphics Capture, затем FFmpeg `ddagrab`, а при недоступности API — GDI fallback. Native WASAPI loopback и microphone capture сводятся через общий master-clock `AudioMixer` в одну 48 kHz stereo дорожку; при потере источника приложение показывает `[audio_device_lost]` и продолжает с доступным источником или fallback FFmpeg. Mute/unmute микрофона доступен через заданный global hotkey и пункт tray. Device-loss recovery с автоматическим resume и HDR/DRM capability states реализованы в Windows-срезе; native macOS/Linux capture и прямые FFmpeg libraries остаются следующими production-срезами.
 
 Проверка обновлений запускается только вручную на странице Advanced и обращается к GitHub Releases. Телеметрия отсутствует.
 
-На странице Notifications можно отключить системные уведомления и угловой click-through overlay. Overlay показывает короткие события записи/экспорта, не принимает мышь; Windows запрашивает исключение окна из поддерживаемых capture API.
+На странице Notifications можно отключить системные уведомления и угловой click-through overlay, выбрать язык RU/EN, один из четырёх углов, длительность и прозрачность. Overlay показывает короткие события записи/экспорта, не принимает мышь; Windows запрашивает исключение окна из поддерживаемых capture API.
+
+На странице Storage можно выбрать каталог клипов только на локальном фиксированном диске, открыть его и очистить временные сегменты/буфер. Завершённые сегменты удерживаются в RAM до мягкого лимита 70%, затем используются с локальным disk spillover.
 
 При блокировке Windows или sleep захват ставится на паузу. После возврата источника приложение продолжает его только при включённом `Auto resume` и после проверки стабильности.

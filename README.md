@@ -50,7 +50,12 @@ Portable Windows ZIP собирается воспроизводимым скр�
   оценка и лимит размера файла;
 - автоматический переход с недоступного NVENC на software H.264;
 - системный трей, старт/пауза/стоп/очистка/сохранение;
-- отдельная страница Notifications с отключаемыми toast/system уведомлениями;
+- отдельная страница Notifications с отключаемыми toast/system уведомлениями,
+  языком, четырьмя углами, длительностью и прозрачностью overlay;
+- гибридное удержание завершённых сегментов в RAM до мягкого порога 70% с disk spillover,
+  выбором локального каталога клипов и отображением временного каталога;
+- динамическая иконка трея: серый — выключено, зелёный — активно, жёлтый — пауза/предупреждение,
+  красный — ошибка;
 - асинхронная capability-проверка FFmpeg до старта буфера с понятным списком capture/audio/encoder возможностей;
 - глобальные хоткеи по умолчанию `Ctrl+Shift+F10`, `Ctrl+Shift+F1`, `Ctrl+Shift+F7`, `Ctrl+Shift+F5`;
 - JSON-настройки с миграционной точкой и сохранением неизвестных полей;
@@ -61,7 +66,7 @@ Portable Windows ZIP собирается воспроизводимым скр�
 на Apple Silicon (включая M1). В текущем срезе полностью проверен Windows
 portable-путь; native macOS/Linux backends ещё не подключены.
 
-Native Windows DXGI Desktop Duplication уже подключён через D3D11 staging/raw-BGRA pipe, а при отказе DXGI используется Windows Graphics Capture с тем же crop/cursor/raw-video контрактом. Native WASAPI loopback и microphone capture сводятся через `AudioMixer` в f32le pipe. При недоступности native capture/audio автоматически используются portable FFmpeg backend’ы, включая `ddagrab`/`gdigrab` и доступный audio input. Mute/unmute microphone работает через global hotkey и tray action. Device-loss recovery с автоматическим resume, HDR/DRM capability states, прямые FFmpeg libraries и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
+Native Windows DXGI Desktop Duplication уже подключён через D3D11 staging/raw-BGRA pipe, а при отказе DXGI используется Windows Graphics Capture с тем же crop/cursor/raw-video контрактом. Native WASAPI loopback и microphone capture сводятся через `AudioMixer` в f32le pipe. При недоступности native capture/audio автоматически используются portable FFmpeg backend’ы, включая `ddagrab`/`gdigrab` и доступный audio input. Mute/unmute microphone работает через global hotkey и tray action. Device-loss recovery, HDR/DRM capability states и automatic resume реализованы и проверены на Windows-машине; прямые FFmpeg libraries, GPU scaler и native backend’ы macOS/Linux остаются production-срезами следующего этапа. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
 
 ## Публикация
 
@@ -75,7 +80,6 @@ Native Windows DXGI Desktop Duplication уже подключён через D3D
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
-- Нормативное ТЗ хранится у заказчика в `TECHNICAL_SPECIFICATION_RU.md` и должно быть скопировано в `docs/` перед первым release-коммитом.
 
 ## Лицензия
 
