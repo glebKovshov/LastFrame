@@ -78,6 +78,7 @@ private:
     void selectPage(int pageIndex);
     void applyTheme(bool dark);
     void applyRecorderState();
+    void updateCapabilityWarning();
     void loadSettings();
     void saveSettings();
     void showFirstRunDialog();
@@ -119,6 +120,7 @@ private:
     QSpinBox* bitrateSpin_ = nullptr;
     QSpinBox* maxFileSizeSpin_ = nullptr;
     QLabel* estimatedSizeLabel_ = nullptr;
+    QLabel* capabilityWarningLabel_ = nullptr;
     QComboBox* themeCombo_ = nullptr;
     QComboBox* languageCombo_ = nullptr;
     QCheckBox* systemAudioCheck_ = nullptr;
@@ -135,6 +137,7 @@ private:
     QUrl latestReleaseUrl_;
     QString lastSavedPath_;
     QString capabilitySummary_;
+    LastFrame::Platform::FfmpegCapabilities capabilities_;
     bool monitorSignatureInitialized_ = false;
     bool monitorResumePending_ = false;
     bool forceQuit_ = false;

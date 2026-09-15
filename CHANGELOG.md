@@ -15,6 +15,8 @@
   and a persistent interface-language setting.
 - Added logical-to-physical monitor geometry mapping for high-DPI custom regions;
   native DXGI/WGC and portable capture now receive physical pixel rectangles.
+- Added pre-start capability warnings for pending probes, unavailable encoders/VP9,
+  missing WASAPI, and FPS values above the selected monitor refresh rate.
 - Added local clip-directory selection, temporary-segment visibility, log opening and
   tray/Storage actions for opening the clips directory.
 - Added state-colored tray icon: gray idle, green recording, yellow paused/warning,

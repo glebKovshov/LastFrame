@@ -16,6 +16,8 @@ The window can be closed to keep LastFrame in the system tray. The buffer is not
 
 Clips are saved to `Videos/LastFrame` by default. A final file is exposed only after a successful export and atomic rename.
 
+Before starting the buffer, Capture/Video show capability warnings when the FFmpeg probe is still pending, a selected encoder or VP9 is unavailable, WASAPI is missing, or FPS exceeds the monitor refresh rate. Automatic fallback remains visible instead of being hidden.
+
 ## Privacy and updates
 
 Capture, audio, clips, and diagnostics stay local. There is no telemetry. Update checks are manual and use the GitHub Releases API only when requested.

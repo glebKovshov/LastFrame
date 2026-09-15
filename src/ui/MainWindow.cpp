@@ -425,6 +425,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&updater_, &Platform::UpdateChecker::error, this, &MainWindow::showRecorderError);
     connect(&capabilityProbe_, &Platform::FfmpegCapabilityProbe::finished, this,
             [this](const Platform::FfmpegCapabilities& capabilities) {
+                capabilities_ = capabilities;
                 if (!capabilities.available) {
                     capabilitySummary_ = QStringLiteral("FFmpeg не найден. Положите ffmpeg.exe рядом с LastFrame.exe или добавьте его в PATH.");
                 } else {
@@ -726,7 +727,10 @@ QWidget* MainWindow::buildCapturePage() {
             autoResumeTimer_.stop();
         }
     });
-    connect(fpsSpin_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) { settings_.capture.fps = value; });
+    connect(fpsSpin_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+        settings_.capture.fps = value;
+        updateCapabilityWarning();
+    });
     connect(resolutionPreset, qOverload<int>(&QComboBox::currentIndexChanged), this, applyResolutionPreset);
     connect(outputWidthSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
             [this, resolutionPreset](int value) {
@@ -751,6 +755,10 @@ QWidget* MainWindow::buildVideoPage() {
     layout->setContentsMargins(42, 36, 42, 36);
     layout->addWidget(heading(QStringLiteral("Video"), page));
     layout->addWidget(description(QStringLiteral("MVP использует MP4 как основной формат и аппаратный H.264 NVENC на NVIDIA."), page));
+    capabilityWarningLabel_ = new QLabel(page);
+    capabilityWarningLabel_->setWordWrap(true);
+    capabilityWarningLabel_->setObjectName(QStringLiteral("warningLabel"));
+    layout->addWidget(capabilityWarningLabel_);
     auto* form = new QFormLayout;
     containerCombo_ = new QComboBox(page);
     containerCombo_->addItem(QStringLiteral("MP4"), QStringLiteral("mp4"));
@@ -800,6 +808,7 @@ QWidget* MainWindow::buildVideoPage() {
         } else if (!webm && codecCombo_->currentData().toString() == QStringLiteral("libvpx-vp9")) {
             codecCombo_->setCurrentIndex(codecCombo_->findData(QStringLiteral("auto")));
         }
+        updateCapabilityWarning();
     });
     connect(codecCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this,
             [this](int index) {
@@ -809,6 +818,7 @@ QWidget* MainWindow::buildVideoPage() {
                     return;
                 }
                 settings_.video.codec = codecCombo_->itemData(index).toString().toStdString();
+                updateCapabilityWarning();
             });
     connect(presetCombo_, &QComboBox::currentTextChanged, this,
             [this](const QString& value) {
@@ -852,6 +862,7 @@ QWidget* MainWindow::buildVideoPage() {
         bitrateSpin_->setValue(bitrate);
     }
     updateEstimatedSize();
+    updateCapabilityWarning();
     return page;
 }
 
@@ -1457,13 +1468,66 @@ void MainWindow::applyTheme(const bool dark) {
         "QComboBox, QSpinBox, QLineEdit { background: %3; color: %2; border: 1px solid %4; border-radius: 8px; padding: 7px; }"
         "QCheckBox { spacing: 8px; padding: 7px 0; }"
         "#statusLabel { color: %6; font-size: 20px; font-weight: 700; }"
+        "#warningLabel { color: #E0A800; padding: 6px 0; }"
     ).arg(background, text, surface, dark ? QStringLiteral("#444444") : QStringLiteral("#D8D8D4"), muted, QString::fromLatin1(accent)));
+}
+
+void MainWindow::updateCapabilityWarning() {
+    if (capabilityWarningLabel_ == nullptr) {
+        return;
+    }
+    const bool english = settings_.language == "en";
+    QStringList warnings;
+    const auto add = [&warnings, english](const char* russian, const char* englishText) {
+        warnings << QString::fromUtf8(english ? englishText : russian);
+    };
+    if (capabilities_.path.isEmpty()) {
+        add("Проверка возможностей FFmpeg ещё не завершена.",
+            "The FFmpeg capability check has not finished yet.");
+    } else if (!capabilities_.available) {
+        add("FFmpeg недоступен: старт буфера будет отклонён.",
+            "FFmpeg is unavailable: buffer start will be rejected.");
+    } else {
+        const QString container = QString::fromStdString(settings_.video.container).toLower();
+        const QString codec = QString::fromStdString(settings_.video.codec).toLower();
+        const bool anyH264 = capabilities_.nvencH264 || capabilities_.amfH264 || capabilities_.qsvH264 ||
+                             capabilities_.videoToolboxH264 || capabilities_.softwareH264;
+        if (container == QStringLiteral("webm") && !capabilities_.vp9) {
+            add("Для WebM в текущем FFmpeg не найден VP9; экспорт будет недоступен.",
+                "VP9 was not found in the current FFmpeg; WebM export will be unavailable.");
+        } else if (container != QStringLiteral("webm") &&
+                   ((codec == QStringLiteral("h264_nvenc") && !capabilities_.nvencH264) ||
+                    (codec == QStringLiteral("h264_amf") && !capabilities_.amfH264) ||
+                    (codec == QStringLiteral("h264_qsv") && !capabilities_.qsvH264) ||
+                    (codec == QStringLiteral("h264_videotoolbox") && !capabilities_.videoToolboxH264) ||
+                    (codec == QStringLiteral("libx264") && !capabilities_.softwareH264) ||
+                    (codec == QStringLiteral("auto") && !anyH264))) {
+            add("Выбранный профиль H.264 не подтверждён capability probe; будет использован fallback или показана ошибка.",
+                "The selected H.264 profile was not confirmed by the capability probe; a fallback or an error will be used.");
+        }
+#if defined(Q_OS_WIN)
+        if (settings_.audio.systemEnabled && !capabilities_.wasapi) {
+            add("WASAPI loopback не найден; системный звук будет отключён или заменён fallback.",
+                "WASAPI loopback was not found; system audio will be disabled or replaced by a fallback.");
+        }
+#endif
+    }
+    const int monitorIndex = monitorCombo_ == nullptr ? -1 : monitorCombo_->currentIndex();
+    if (monitorIndex >= 0 && monitorIndex < monitors_.size() && monitors_.at(monitorIndex).refreshRate > 0 &&
+        settings_.capture.fps > monitors_.at(monitorIndex).refreshRate) {
+        warnings << (english
+                         ? QStringLiteral("FPS exceeds the selected monitor refresh rate.")
+                         : QStringLiteral("FPS выше частоты обновления выбранного монитора."));
+    }
+    capabilityWarningLabel_->setText(warnings.join(QStringLiteral("\n")));
+    capabilityWarningLabel_->setVisible(!warnings.isEmpty());
 }
 
 void MainWindow::applyRecorderState() {
     const bool active = recorder_.isRecording();
     const bool paused = recorder_.isPaused();
     const QString language = QString::fromStdString(settings_.language);
+    updateCapabilityWarning();
     startButton_->setText(localizedUiText(active || paused ? QStringLiteral("Остановить") : QStringLiteral("Начать буфер"), language));
     pauseButton_->setText(localizedUiText(paused ? QStringLiteral("Продолжить") : QStringLiteral("Пауза"), language));
     pauseButton_->setEnabled(active || paused);
@@ -1664,6 +1728,7 @@ void MainWindow::populateMonitorCombo() {
     } else if (!monitors_.isEmpty()) {
         monitorCombo_->setCurrentIndex(0);
     }
+    updateCapabilityWarning();
 }
 
 std::filesystem::path MainWindow::settingsPath() {
