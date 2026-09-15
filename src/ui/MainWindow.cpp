@@ -591,8 +591,31 @@ void MainWindow::startOrStop() {
     if (recorder_.isRecording() || recorder_.isPaused()) {
         recorder_.stop();
     } else {
+        const int monitorIndex = monitorCombo_ == nullptr ? -1 : monitorCombo_->currentIndex();
+        if (monitorIndex < 0 || monitorIndex >= monitors_.size()) {
+            showToast(QStringLiteral("Нельзя начать буфер: монитор не выбран."), true);
+            return;
+        }
         settings_.capture.fps = fpsSpin_ == nullptr ? settings_.capture.fps : fpsSpin_->value();
         settings_.buffer.durationSeconds = durationSpin_ == nullptr ? settings_.buffer.durationSeconds : durationSpin_->value();
+        const auto& monitor = monitors_.at(monitorIndex);
+        if (monitor.refreshRate > 0 && settings_.capture.fps > monitor.refreshRate) {
+            showToast(QStringLiteral("FPS %1 выше текущей частоты монитора %2 Hz. Уменьшите значение перед стартом.")
+                         .arg(settings_.capture.fps)
+                         .arg(monitor.refreshRate),
+                     true);
+            return;
+        }
+        if (settings_.capture.source == "custom_region" &&
+            (settings_.capture.regionWidth < 4 || settings_.capture.regionHeight < 4)) {
+            showToast(QStringLiteral("Выбран custom region, но область не задана или слишком мала."), true);
+            return;
+        }
+        if (settings_.capture.outputWidth > 0 && settings_.capture.outputHeight > 0 &&
+            ((settings_.capture.outputWidth % 2) != 0 || (settings_.capture.outputHeight % 2) != 0)) {
+            showToast(QStringLiteral("Выходное разрешение должно быть чётным для выбранного YUV420 профиля."), true);
+            return;
+        }
         recorder_.start(settings_);
     }
 }
