@@ -115,11 +115,14 @@ private:
     QSystemTrayIcon* tray_ = nullptr;
     QAction* trayMuteAction_ = nullptr;
     QTimer monitorTimer_;
+    QTimer autoResumeTimer_;
     QString monitorSignature_;
+    QString autoResumeSignature_;
     QUrl latestReleaseUrl_;
     QString lastSavedPath_;
     QString capabilitySummary_;
     bool monitorSignatureInitialized_ = false;
+    bool monitorResumePending_ = false;
     bool forceQuit_ = false;
     bool settingsRecovered_ = false;
 };

@@ -156,6 +156,27 @@ MainWindow::MainWindow(QWidget* parent)
     monitorTimer_.setInterval(500);
     connect(&monitorTimer_, &QTimer::timeout, this, &MainWindow::refreshMonitors);
     monitorTimer_.start();
+    autoResumeTimer_.setSingleShot(true);
+    autoResumeTimer_.setInterval(2000);
+    connect(&autoResumeTimer_, &QTimer::timeout, this, [this] {
+        if (!monitorResumePending_ || autoResumeSignature_ != monitorSignature_ ||
+            !settings_.capture.autoResume || recorder_.isRecording()) {
+            return;
+        }
+        const QString selectedId = QString::fromStdString(settings_.capture.monitorId);
+        const bool monitorAvailable = selectedId.compare(QStringLiteral("auto"), Qt::CaseInsensitive) == 0
+                                      ? !monitors_.isEmpty()
+                                      : std::any_of(monitors_.cbegin(), monitors_.cend(),
+                                                    [&selectedId](const Platform::MonitorInfo& monitor) {
+                                                        return monitor.id == selectedId;
+                                                    });
+        if (!monitorAvailable) {
+            return;
+        }
+        monitorResumePending_ = false;
+        recorder_.start(settings_);
+        showToast(QStringLiteral("Захват автоматически продолжен после восстановления монитора."));
+    });
     applyRecorderState();
 }
 
@@ -285,6 +306,9 @@ QWidget* MainWindow::buildCapturePage() {
     auto* cursor = new QCheckBox(QStringLiteral("Показывать курсор"), page);
     cursor->setChecked(settings_.capture.showCursor);
     form->addRow(QString(), cursor);
+    auto* autoResume = new QCheckBox(QStringLiteral("Автоматически продолжать после изменения монитора"), page);
+    autoResume->setChecked(settings_.capture.autoResume);
+    form->addRow(QString(), autoResume);
     fpsSpin_ = new QSpinBox(page);
     fpsSpin_->setRange(15, 360);
     fpsSpin_->setValue(settings_.capture.fps);
@@ -313,6 +337,13 @@ QWidget* MainWindow::buildCapturePage() {
     });
     connect(regionButton_, &QPushButton::clicked, this, &MainWindow::chooseRegion);
     connect(cursor, &QCheckBox::toggled, this, [this](bool value) { settings_.capture.showCursor = value; });
+    connect(autoResume, &QCheckBox::toggled, this, [this](bool value) {
+        settings_.capture.autoResume = value;
+        if (!value) {
+            monitorResumePending_ = false;
+            autoResumeTimer_.stop();
+        }
+    });
     connect(fpsSpin_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) { settings_.capture.fps = value; });
     connect(outputWidthSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
             [this](int value) { settings_.capture.outputWidth = value; });
@@ -714,15 +745,32 @@ void MainWindow::refreshMonitors() {
     const auto detected = Platform::MonitorEnumerator::enumerate();
     QString signature;
     for (const auto& monitor : detected) {
-        signature += monitor.id + QStringLiteral("|") + QString::number(monitor.refreshRate) + QStringLiteral(";");
+        signature += monitor.id + QStringLiteral("|") + QString::number(monitor.resolution.width()) +
+                     QStringLiteral("x") + QString::number(monitor.resolution.height()) + QStringLiteral("|") +
+                     QString::number(monitor.refreshRate) + QStringLiteral("|") + monitor.orientation +
+                     QStringLiteral("|") + QString::number(monitor.devicePixelRatio, 'f', 3) + QStringLiteral(";");
     }
     const bool changed = monitorSignatureInitialized_ && signature != monitorSignature_;
     monitorSignature_ = signature;
     monitorSignatureInitialized_ = true;
     monitors_ = detected;
-    if (changed && recorder_.isRecording()) {
+    if (changed && (recorder_.isRecording() || recorder_.isPaused())) {
+        monitorResumePending_ = settings_.capture.autoResume;
+        autoResumeTimer_.stop();
         recorder_.stop();
-            showToast(QStringLiteral("[monitor_changed] Монитор или его режим изменился. Буфер остановлен; проверьте настройки и запустите снова."), true);
+        showToast(QStringLiteral("[monitor_changed] Конфигурация монитора изменилась. Буфер остановлен; ожидаю стабильное восстановление."), true);
+    } else if (monitorResumePending_ && settings_.capture.autoResume && !autoResumeTimer_.isActive()) {
+        const QString selectedId = QString::fromStdString(settings_.capture.monitorId);
+        const bool monitorAvailable = selectedId.compare(QStringLiteral("auto"), Qt::CaseInsensitive) == 0
+                                      ? !detected.isEmpty()
+                                      : std::any_of(detected.cbegin(), detected.cend(),
+                                                    [&selectedId](const Platform::MonitorInfo& monitor) {
+                                                        return monitor.id == selectedId;
+                                                    });
+        if (monitorAvailable) {
+            autoResumeSignature_ = signature;
+            autoResumeTimer_.start();
+        }
     }
     populateMonitorCombo();
 }
