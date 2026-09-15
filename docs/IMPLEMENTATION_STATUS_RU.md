@@ -41,6 +41,8 @@
 - Ошибки recorder/hotkey/update имеют стабильные технические коды для диагностики:
   `capture_failed`, `audio_device_lost`, `encoder_unavailable`, `export_failed`,
   `queue_overflow`, `hotkey_conflict`, `monitor_changed`.
+- Ошибки показываются в отдельном окне с technical details, ссылкой на локальный
+  log path, действиями copy diagnostics и restart capture.
 - Ручная проверка GitHub Releases через `api.github.com`, без фоновой телеметрии или автообновления.
 - Асинхронный FFmpeg capability probe в Advanced: Desktop Duplication/GDI,
   audio devices и доступные encoder profiles отображаются до запуска буфера.

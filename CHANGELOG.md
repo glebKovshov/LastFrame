@@ -34,6 +34,8 @@
   indicator; on supported Windows capture APIs it requests `WDA_EXCLUDEFROMCAPTURE`.
 - Added Windows lock/sleep/hibernate lifecycle handling: capture sessions pause on
   suspend/lock and use the existing two-second Auto resume path after unlock/resume.
+- Added an actionable error dialog with technical details, local log path, copy
+  diagnostics and capture restart actions.
 - Added a hardware smoke override (`LASTFRAME_FORCE_WGC=1`) used to validate the
   Windows Graphics Capture path end-to-end on the development machine.
 

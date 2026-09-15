@@ -880,6 +880,21 @@ void MainWindow::handleHotkey(const Platform::HotkeyAction action) {
 void MainWindow::showRecorderError(const QString& text) {
     Platform::Diagnostics::append(QStringLiteral("ERROR"), text);
     showToast(text, true);
+    QMessageBox dialog(QMessageBox::Critical, QStringLiteral("LastFrame — ошибка"), text,
+                       QMessageBox::NoButton, this);
+    dialog.setInformativeText(QStringLiteral("Проверьте настройки захвата или перезапустите сессию. Старые сохранённые клипы не затрагиваются."));
+    dialog.setDetailedText(QStringLiteral("Технический код и подробности записаны в локальный лог:\n%1")
+                               .arg(Platform::Diagnostics::logPath()));
+    auto* copyButton = dialog.addButton(QStringLiteral("Скопировать диагностику"), QMessageBox::ActionRole);
+    auto* restartButton = dialog.addButton(QStringLiteral("Перезапустить захват"), QMessageBox::AcceptRole);
+    dialog.addButton(QStringLiteral("Закрыть"), QMessageBox::RejectRole);
+    dialog.exec();
+    if (dialog.clickedButton() == copyButton) {
+        copyDiagnostics();
+    } else if (dialog.clickedButton() == restartButton) {
+        recorder_.stop();
+        recorder_.start(settings_);
+    }
 }
 
 void MainWindow::showRecorderMessage(const QString& text) {
