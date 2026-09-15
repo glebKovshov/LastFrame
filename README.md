@@ -1,5 +1,11 @@
 # LastFrame
 
+<p align="center">
+  <img src="logo/lastframe-icon.png" alt="LastFrame logo" width="180">
+</p>
+
+<p align="center"><strong>Local instant replay recorder for Windows</strong></p>
+
 LastFrame — локальная portable-утилита для сохранения последних секунд экрана по глобальному хоткею.
 
 Текущий этап — Windows MVP: окно настроек, кольцевой буферный core, системный трей и сегментный recorder через FFmpeg. На совместимых Windows-сборках используется Desktop Duplication (`ddagrab`), с автоматическим GDI fallback. Приложение не отправляет кадры, звук или логи в облако.
