@@ -12,6 +12,10 @@ struct MonitorInfo {
     QString name;
     QRect geometry;
     QSize resolution;
+    // Qt geometry is used by the UI and follows the desktop's logical/DPI
+    // coordinate space. Native capture APIs need physical desktop pixels.
+    QRect nativeGeometry;
+    QSize nativeResolution;
     int refreshRate = 60;
     qreal devicePixelRatio = 1.0;
     QString orientation;

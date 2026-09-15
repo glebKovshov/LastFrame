@@ -26,4 +26,6 @@ The Notifications page controls system notifications and the click-through corne
 
 The full interface language is selected on Advanced → Interface language. Switching to RU or EN rebuilds the window and tray menu immediately and persists the choice in `settings.json`; notification language remains independently configurable.
 
+Custom-region coordinates are stored logically and converted to the monitor's physical pixels before capture, so Windows scaling is accounted for. A manual release check is still required for multi-monitor setups with different DPI values.
+
 Storage lets the user choose, open, and clean the local clip directory. Completed segments stay in RAM up to the 70% soft limit and spill over to the local temporary directory when needed.

@@ -43,6 +43,37 @@ bool materializeSegments(const QList<QPair<QString, QByteArray>>& segments) {
     return true;
 }
 
+QRect logicalCaptureRect(const Platform::MonitorInfo& monitor, const LastFrame::Core::Settings& settings) {
+    QRect captureRect = monitor.geometry;
+    if (settings.capture.source == "custom_region" && settings.capture.regionWidth > 3 &&
+        settings.capture.regionHeight > 3) {
+        const QRect localRegion(settings.capture.regionX, settings.capture.regionY,
+                                settings.capture.regionWidth, settings.capture.regionHeight);
+        const QRect monitorLocal(QPoint(0, 0), monitor.geometry.size());
+        const QRect boundedRegion = localRegion.intersected(monitorLocal);
+        if (boundedRegion.width() > 3 && boundedRegion.height() > 3) {
+            captureRect = QRect(monitor.geometry.topLeft() + boundedRegion.topLeft(), boundedRegion.size());
+        }
+    }
+    return captureRect;
+}
+
+QRect nativeCaptureRect(const Platform::MonitorInfo& monitor, const QRect& logicalRect) {
+    const QRect nativeMonitor = monitor.nativeGeometry.isValid() ? monitor.nativeGeometry : monitor.geometry;
+    if (nativeMonitor.size() == monitor.geometry.size() || monitor.geometry.width() <= 0 ||
+        monitor.geometry.height() <= 0) {
+        return QRect(nativeMonitor.topLeft() + (logicalRect.topLeft() - monitor.geometry.topLeft()),
+                     logicalRect.size());
+    }
+    const qreal scaleX = static_cast<qreal>(nativeMonitor.width()) / monitor.geometry.width();
+    const qreal scaleY = static_cast<qreal>(nativeMonitor.height()) / monitor.geometry.height();
+    const QPoint local = logicalRect.topLeft() - monitor.geometry.topLeft();
+    return QRect(nativeMonitor.x() + qRound(local.x() * scaleX),
+                 nativeMonitor.y() + qRound(local.y() * scaleY),
+                 std::max(1, qRound(logicalRect.width() * scaleX)),
+                 std::max(1, qRound(logicalRect.height() * scaleY)));
+}
+
 } // namespace
 
 PortableSegmentRecorder::PortableSegmentRecorder(QObject* parent) : QObject(parent) {
@@ -605,21 +636,13 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
         monitors, QString::fromStdString(settings_.capture.monitorId));
     const Platform::MonitorInfo monitor = monitors.value(std::max(0, monitorIndex));
     const int fps = std::clamp(settings_.capture.fps, 15, std::max(15, monitor.refreshRate));
-    QRect captureRect = monitor.geometry;
-    if (settings_.capture.source == "custom_region" && settings_.capture.regionWidth > 3 &&
-        settings_.capture.regionHeight > 3) {
-        const QRect localRegion(settings_.capture.regionX, settings_.capture.regionY,
-                                settings_.capture.regionWidth, settings_.capture.regionHeight);
-        const QRect monitorLocal(QPoint(0, 0), monitor.geometry.size());
-        const QRect boundedRegion = localRegion.intersected(monitorLocal);
-        if (boundedRegion.width() > 3 && boundedRegion.height() > 3) {
-            captureRect = QRect(monitor.geometry.topLeft() + boundedRegion.topLeft(), boundedRegion.size());
-        }
-    }
-    const int outputWidth = settings_.capture.outputWidth > 0 ? settings_.capture.outputWidth : captureRect.width();
-    const int outputHeight = settings_.capture.outputHeight > 0 ? settings_.capture.outputHeight : captureRect.height();
-    const int localOffsetX = captureRect.x() - monitor.geometry.x();
-    const int localOffsetY = captureRect.y() - monitor.geometry.y();
+    const QRect captureRect = logicalCaptureRect(monitor, settings_);
+    const QRect physicalCaptureRect = nativeCaptureRect(monitor, captureRect);
+    const QRect physicalMonitorRect = monitor.nativeGeometry.isValid() ? monitor.nativeGeometry : monitor.geometry;
+    const int outputWidth = settings_.capture.outputWidth > 0 ? settings_.capture.outputWidth : physicalCaptureRect.width();
+    const int outputHeight = settings_.capture.outputHeight > 0 ? settings_.capture.outputHeight : physicalCaptureRect.height();
+    const int localOffsetX = physicalCaptureRect.x() - physicalMonitorRect.x();
+    const int localOffsetY = physicalCaptureRect.y() - physicalMonitorRect.y();
     QStringList args{QStringLiteral("-hide_banner"), QStringLiteral("-loglevel"), QStringLiteral("warning"),
                      QStringLiteral("-y")};
 #if defined(Q_OS_WIN)
@@ -645,8 +668,8 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
                                    .arg(std::max(0, monitorIndex))
                                    .arg(settings_.capture.showCursor ? 1 : 0)
                                    .arg(fps)
-                                   .arg(captureRect.width())
-                                   .arg(captureRect.height())
+                                   .arg(physicalCaptureRect.width())
+                                   .arg(physicalCaptureRect.height())
                                    .arg(localOffsetX)
                                    .arg(localOffsetY);
         args << QStringLiteral("-f") << QStringLiteral("lavfi") << QStringLiteral("-i") << filter;
@@ -654,9 +677,9 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
         args << QStringLiteral("-f") << QStringLiteral("gdigrab") << QStringLiteral("-framerate")
              << QString::number(fps) << QStringLiteral("-draw_mouse")
              << (settings_.capture.showCursor ? QStringLiteral("1") : QStringLiteral("0"))
-             << QStringLiteral("-offset_x") << QString::number(captureRect.x()) << QStringLiteral("-offset_y")
-             << QString::number(captureRect.y()) << QStringLiteral("-video_size")
-             << QStringLiteral("%1x%2").arg(captureRect.width()).arg(captureRect.height()) << QStringLiteral("-i")
+             << QStringLiteral("-offset_x") << QString::number(physicalCaptureRect.x()) << QStringLiteral("-offset_y")
+             << QString::number(physicalCaptureRect.y()) << QStringLiteral("-video_size")
+             << QStringLiteral("%1x%2").arg(physicalCaptureRect.width()).arg(physicalCaptureRect.height()) << QStringLiteral("-i")
              << QStringLiteral("desktop");
     }
 #elif defined(Q_OS_MAC)
@@ -668,12 +691,12 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
 #elif defined(Q_OS_LINUX)
     args << QStringLiteral("-f") << QStringLiteral("x11grab") << QStringLiteral("-framerate")
          << QString::number(fps) << QStringLiteral("-video_size")
-         << QStringLiteral("%1x%2").arg(captureRect.width()).arg(captureRect.height()) << QStringLiteral("-i")
-         << QStringLiteral(":0.0+%1,%2").arg(captureRect.x()).arg(captureRect.y());
+         << QStringLiteral("%1x%2").arg(physicalCaptureRect.width()).arg(physicalCaptureRect.height()) << QStringLiteral("-i")
+         << QStringLiteral(":0.0+%1,%2").arg(physicalCaptureRect.x()).arg(physicalCaptureRect.y());
 #else
     args << QStringLiteral("-f") << QStringLiteral("lavfi") << QStringLiteral("-i")
          << QStringLiteral("color=size=%1x%2:rate=%3")
-                .arg(captureRect.width()).arg(captureRect.height()).arg(fps);
+                .arg(physicalCaptureRect.width()).arg(physicalCaptureRect.height()).arg(fps);
 #endif
 #if defined(Q_OS_WIN)
     const bool includeNativeAudio = withAudio && useNativeAudio_;
@@ -1071,20 +1094,11 @@ bool PortableSegmentRecorder::prepareNativeCapture() {
         return false;
     }
     const Platform::MonitorInfo monitor = monitors.at(monitorIndex);
-    QRect captureRect = monitor.geometry;
-    if (settings_.capture.source == "custom_region" && settings_.capture.regionWidth > 3 &&
-        settings_.capture.regionHeight > 3) {
-        const QRect localRegion(settings_.capture.regionX, settings_.capture.regionY,
-                                settings_.capture.regionWidth, settings_.capture.regionHeight);
-        const QRect monitorLocal(QPoint(0, 0), monitor.geometry.size());
-        const QRect boundedRegion = localRegion.intersected(monitorLocal);
-        if (boundedRegion.width() > 3 && boundedRegion.height() > 3) {
-            captureRect = QRect(monitor.geometry.topLeft() + boundedRegion.topLeft(), boundedRegion.size());
-        }
-    }
+    const QRect captureRect = nativeCaptureRect(monitor, logicalCaptureRect(monitor, settings_));
+    const QRect monitorGeometry = monitor.nativeGeometry.isValid() ? monitor.nativeGeometry : monitor.geometry;
     Platform::WindowsDesktopCapture::Config config;
     config.outputIndex = monitorIndex;
-    config.monitorGeometry = monitor.geometry;
+    config.monitorGeometry = monitorGeometry;
     config.captureGeometry = captureRect;
     config.fps = std::clamp(settings_.capture.fps, 15, std::max(15, monitor.refreshRate));
     config.showCursor = settings_.capture.showCursor;
@@ -1112,19 +1126,10 @@ bool PortableSegmentRecorder::prepareWindowsGraphicsCapture() {
         return false;
     }
     const Platform::MonitorInfo monitor = monitors.at(monitorIndex);
-    QRect captureRect = monitor.geometry;
-    if (settings_.capture.source == "custom_region" && settings_.capture.regionWidth > 3 &&
-        settings_.capture.regionHeight > 3) {
-        const QRect localRegion(settings_.capture.regionX, settings_.capture.regionY,
-                                settings_.capture.regionWidth, settings_.capture.regionHeight);
-        const QRect monitorLocal(QPoint(0, 0), monitor.geometry.size());
-        const QRect boundedRegion = localRegion.intersected(monitorLocal);
-        if (boundedRegion.width() > 3 && boundedRegion.height() > 3) {
-            captureRect = QRect(monitor.geometry.topLeft() + boundedRegion.topLeft(), boundedRegion.size());
-        }
-    }
+    const QRect captureRect = nativeCaptureRect(monitor, logicalCaptureRect(monitor, settings_));
+    const QRect monitorGeometry = monitor.nativeGeometry.isValid() ? monitor.nativeGeometry : monitor.geometry;
     Platform::WindowsGraphicsCapture::Config config;
-    config.monitorGeometry = monitor.geometry;
+    config.monitorGeometry = monitorGeometry;
     config.captureGeometry = captureRect;
     config.fps = std::clamp(settings_.capture.fps, 15, std::max(15, monitor.refreshRate));
     config.showCursor = settings_.capture.showCursor;

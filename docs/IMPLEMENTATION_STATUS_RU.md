@@ -90,6 +90,9 @@
 - Переключение языка интерфейса RU/EN в Advanced перестраивает окно и меню трея
   без перезапуска; динамические состояния, ошибки и служебные диалоги используют
   выбранную локаль, язык уведомлений настраивается отдельно.
+- Геометрия монитора разделена на логическую Qt-координатную систему и физические
+  пиксели native capture; custom region масштабируется по фактическому DPI/размеру
+  дисплея перед DXGI/WGC/FFmpeg. Региональный smoke повторён с `QT_SCALE_FACTOR=1.5`.
 - GitHub Actions для core tests и Windows portable artifact.
 
 ## Оставшиеся обязательные срезы по ТЗ
@@ -97,7 +100,7 @@
 1. Интеграционная проверка на конкретных capture backend'ах, что исключение
    overlay действительно соблюдается, и тесты DRM/HDR capability states.
 2. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
-3. Завершить DPI-specific validation для high-DPI monitor geometry и native
+3. Завершить ручную матрицу DPI для нескольких Windows-мониторов и native
    macOS ScreenCaptureKit/Linux PipeWire/portal backends.
 4. Интеграционные тесты на RTX 3070 и полная матрица Windows/Linux/macOS arm64.
 

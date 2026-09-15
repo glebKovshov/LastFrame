@@ -70,6 +70,8 @@ portable-путь; native macOS/Linux backends ещё не подключены.
 
 Native Windows DXGI Desktop Duplication уже подключён через D3D11 staging/raw-BGRA pipe, а при отказе DXGI используется Windows Graphics Capture с тем же crop/cursor/raw-video контрактом. Native WASAPI loopback и microphone capture сводятся через `AudioMixer` в f32le pipe. При недоступности native capture/audio автоматически используются portable FFmpeg backend’ы, включая `ddagrab`/`gdigrab` и доступный audio input. Mute/unmute microphone работает через global hotkey и tray action. Device-loss recovery, HDR/DRM capability states и automatic resume реализованы и проверены на Windows-машине; прямые FFmpeg libraries, GPU scaler и native backend’ы macOS/Linux остаются production-срезами следующего этапа. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
 
+Для high-DPI Windows-конфигураций UI хранит область в логических координатах, а перед native/FFmpeg capture она преобразуется в физические пиксели конкретного монитора. Smoke-проверка региона выполнена также с `QT_SCALE_FACTOR=1.5`; ручная проверка нескольких мониторов с разным DPI остаётся частью release matrix.
+
 ## Публикация
 
 Установщик не создаётся. Release-артефакты должны быть portable ZIP через [GitHub Releases](https://github.com/glebKovshov/LastFrame/releases). Проверка обновлений — ручная и выключена по умолчанию; endpoint — `https://api.github.com/repos/glebKovshov/LastFrame/releases/latest`.

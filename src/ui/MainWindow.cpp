@@ -1330,6 +1330,8 @@ void MainWindow::refreshMonitors() {
     for (const auto& monitor : detected) {
         signature += monitor.id + QStringLiteral("|") + QString::number(monitor.resolution.width()) +
                      QStringLiteral("x") + QString::number(monitor.resolution.height()) + QStringLiteral("|") +
+                     QString::number(monitor.nativeResolution.width()) + QStringLiteral("x") +
+                     QString::number(monitor.nativeResolution.height()) + QStringLiteral("|") +
                      QString::number(monitor.refreshRate) + QStringLiteral("|") + monitor.orientation +
                      QStringLiteral("|") + QString::number(monitor.devicePixelRatio, 'f', 3) + QStringLiteral("|") +
                      (monitor.hdrEnabled ? QStringLiteral("hdr") : QStringLiteral("sdr")) + QStringLiteral(";");

@@ -13,6 +13,38 @@ namespace LastFrame::Platform {
 #if defined(Q_OS_WIN)
 namespace {
 
+struct NativeMonitorLookup {
+    QString name;
+    QRect geometry;
+};
+
+BOOL CALLBACK findNativeMonitorGeometry(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
+    auto* lookup = reinterpret_cast<NativeMonitorLookup*>(data);
+    MONITORINFOEXW info{};
+    info.cbSize = sizeof(info);
+    if (lookup == nullptr || !GetMonitorInfoW(monitor, &info)) {
+        return TRUE;
+    }
+    if (QString::fromWCharArray(info.szDevice) == lookup->name) {
+        lookup->geometry = QRect(info.rcMonitor.left, info.rcMonitor.top,
+                                 info.rcMonitor.right - info.rcMonitor.left,
+                                 info.rcMonitor.bottom - info.rcMonitor.top);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+QRect nativeGeometryForScreen(const QString& screenName, const QRect& logicalGeometry, const qreal dpr) {
+    NativeMonitorLookup lookup{screenName, {}};
+    EnumDisplayMonitors(nullptr, nullptr, findNativeMonitorGeometry, reinterpret_cast<LPARAM>(&lookup));
+    if (lookup.geometry.isValid()) {
+        return lookup.geometry;
+    }
+    const qreal scale = dpr > 0.0 ? dpr : 1.0;
+    return QRect(qRound(logicalGeometry.x() * scale), qRound(logicalGeometry.y() * scale),
+                 qRound(logicalGeometry.width() * scale), qRound(logicalGeometry.height() * scale));
+}
+
 bool isHdrEnabled(const QString& screenName) {
     UINT pathCount = 0;
     UINT modeCount = 0;
@@ -64,8 +96,14 @@ QVector<MonitorInfo> MonitorEnumerator::enumerate() {
         monitor.name = screen->name().isEmpty() ? QStringLiteral("Display") : screen->name();
         monitor.geometry = geometry;
         monitor.resolution = screen->size();
-        monitor.refreshRate = qRound(screen->refreshRate());
         monitor.devicePixelRatio = screen->devicePixelRatio();
+#if defined(Q_OS_WIN)
+        monitor.nativeGeometry = nativeGeometryForScreen(screenName, geometry, monitor.devicePixelRatio);
+#else
+        monitor.nativeGeometry = geometry;
+#endif
+        monitor.nativeResolution = monitor.nativeGeometry.size();
+        monitor.refreshRate = qRound(screen->refreshRate());
         monitor.orientation = screen->orientation() == Qt::LandscapeOrientation
                                   ? QStringLiteral("Landscape")
                                   : QStringLiteral("Portrait");
