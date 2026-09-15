@@ -10,6 +10,7 @@
 #include <QComboBox>
 #include <QDir>
 #include <QDesktopServices>
+#include <QDialog>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -257,6 +258,11 @@ MainWindow::MainWindow(QWidget* parent)
         showToast(QStringLiteral("Захват автоматически продолжен после восстановления источника."));
     });
     applyRecorderState();
+    QTimer::singleShot(0, this, [this] {
+        if (firstRun_) {
+            showFirstRunDialog();
+        }
+    });
 }
 
 MainWindow::~MainWindow() {
@@ -1197,9 +1203,43 @@ void MainWindow::applyRecorderState() {
 }
 
 void MainWindow::loadSettings() {
+    firstRun_ = !std::filesystem::exists(settingsStore_.path());
     bool recovered = false;
     settings_ = settingsStore_.load(&recovered);
     settingsRecovered_ = recovered;
+}
+
+void MainWindow::showFirstRunDialog() {
+    const auto autoProfile = [this] {
+        settings_.capture.monitorId = "auto";
+        settings_.capture.outputWidth = 0;
+        settings_.capture.outputHeight = 0;
+        settings_.capture.fps = 60;
+        if (!monitors_.isEmpty() && monitors_.front().refreshRate > 0) {
+            settings_.capture.fps = std::clamp(60, 15, monitors_.front().refreshRate);
+        }
+        settings_.video.codec = "auto";
+        settings_.video.preset = "high";
+        settings_.buffer.autoStart = false;
+        saveSettings();
+        firstRun_ = false;
+        applyRecorderState();
+    };
+
+    QMessageBox dialog(QMessageBox::Information, QStringLiteral("Добро пожаловать в LastFrame"),
+                       QStringLiteral("Начальная настройка готова. Профиль Auto использует выбранный монитор, безопасный FPS и аппаратный H.264 с fallback."),
+                       QMessageBox::NoButton, this);
+    dialog.setInformativeText(QStringLiteral("Захват не запускается автоматически. Можно оставить Auto или открыть страницы настроек для точной конфигурации."));
+    auto* autoButton = dialog.addButton(QStringLiteral("Оставить Auto"), QMessageBox::AcceptRole);
+    auto* settingsButton = dialog.addButton(QStringLiteral("Открыть настройки"), QMessageBox::ActionRole);
+    dialog.addButton(QStringLiteral("Позже"), QMessageBox::RejectRole);
+    dialog.exec();
+    if (dialog.clickedButton() == autoButton) {
+        autoProfile();
+    } else if (dialog.clickedButton() == settingsButton) {
+        autoProfile();
+        selectPage(1);
+    }
 }
 
 void MainWindow::saveSettings() {

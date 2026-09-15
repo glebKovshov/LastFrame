@@ -78,6 +78,7 @@ private:
     void applyRecorderState();
     void loadSettings();
     void saveSettings();
+    void showFirstRunDialog();
     void showToast(const QString& text, bool isError = false);
     void updateTrayIcon();
     void setupTray();
@@ -135,6 +136,7 @@ private:
     bool monitorResumePending_ = false;
     bool forceQuit_ = false;
     bool settingsRecovered_ = false;
+    bool firstRun_ = false;
     bool trayError_ = false;
     bool trayWarning_ = false;
     bool lifecycleWasRecording_ = false;

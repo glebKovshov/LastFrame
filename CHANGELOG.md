@@ -8,6 +8,8 @@
   keeping Save hotkeys and the UI thread free from large synchronous writes.
 - Export snapshots retain their source segments until completion; concurrent
   clear-buffer actions cannot delete an active snapshot or the current writer file.
+- Added a first-run Auto profile dialog that keeps capture stopped until the user
+  explicitly starts the buffer.
 - Added notification language, corner, duration and opacity settings with JSON validation.
 - Added local clip-directory selection, temporary-segment visibility, log opening and
   tray/Storage actions for opening the clips directory.

@@ -60,6 +60,8 @@
 - Ручная проверка GitHub Releases через `api.github.com`, без фоновой телеметрии или автообновления.
 - Асинхронный FFmpeg capability probe в Advanced: Desktop Duplication/GDI,
   audio devices и доступные encoder profiles отображаются до запуска буфера.
+- Первый запуск показывает Auto-профиль, ограничивает FPS частотой доступного монитора
+  и не запускает capture без явного действия пользователя.
 - Qt-free `AudioMixer` core primitive: общий master clock, silence-fill,
   независимые уровни, mute transitions, resampling и clipping; покрыт unit-тестами
   и подключён к native Windows WASAPI loopback/microphone backend через mixed
