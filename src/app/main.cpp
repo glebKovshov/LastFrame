@@ -1,6 +1,7 @@
 #include "ui/MainWindow.h"
 
 #include <QApplication>
+#include <QIcon>
 #include <QLocalServer>
 #include <QLocalSocket>
 
@@ -9,6 +10,7 @@ int main(int argc, char* argv[]) {
     application.setApplicationName(QStringLiteral("LastFrame"));
     application.setOrganizationName(QStringLiteral("LastFrame"));
     application.setApplicationVersion(QStringLiteral("0.1.0"));
+    application.setWindowIcon(QIcon(QStringLiteral(":/branding/lastframe-icon.png")));
     QApplication::setQuitOnLastWindowClosed(false);
 
     constexpr auto serverName = "LastFrame.SingleInstance";

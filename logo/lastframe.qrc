@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/branding">
+        <file alias="lastframe-icon.png">lastframe-icon.png</file>
+    </qresource>
+</RCC>

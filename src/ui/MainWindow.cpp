@@ -526,9 +526,24 @@ void MainWindow::buildUi() {
     sidebarLayout->setContentsMargins(20, 24, 14, 20);
     sidebarLayout->setSpacing(5);
 
-    auto* logo = new QLabel(QStringLiteral("LastFrame"), sidebar);
+    auto* branding = new QWidget(sidebar);
+    auto* brandingLayout = new QHBoxLayout(branding);
+    brandingLayout->setContentsMargins(0, 0, 0, 0);
+    brandingLayout->setSpacing(10);
+    auto* logoIcon = new QLabel(branding);
+    logoIcon->setObjectName(QStringLiteral("logoIcon"));
+    logoIcon->setFixedSize(42, 42);
+    logoIcon->setAlignment(Qt::AlignCenter);
+    const QPixmap logoPixmap(QStringLiteral(":/branding/lastframe-icon.png"));
+    if (!logoPixmap.isNull()) {
+        logoIcon->setPixmap(logoPixmap.scaled(42, 42, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    }
+    brandingLayout->addWidget(logoIcon);
+    auto* logo = new QLabel(QStringLiteral("LastFrame"), branding);
     logo->setObjectName(QStringLiteral("logo"));
-    sidebarLayout->addWidget(logo);
+    brandingLayout->addWidget(logo);
+    brandingLayout->addStretch();
+    sidebarLayout->addWidget(branding);
     sidebarLayout->addWidget(description(QStringLiteral("Сохраняйте последние секунды игры"), sidebar));
     sidebarLayout->addSpacing(22);
 
@@ -1685,12 +1700,16 @@ void MainWindow::updateTrayIcon() {
                                     : trayWarning_ || recorder_.isPaused() ? QColor(QStringLiteral("#E0A800"))
                                     : recorder_.isRecording() ? QColor(QStringLiteral("#36B37E"))
                                                               : QColor(QStringLiteral("#8A8A8A"));
-    QPixmap pixmap(32, 32);
-    pixmap.fill(Qt::transparent);
+    QPixmap pixmap = QIcon(QStringLiteral(":/branding/lastframe-icon.png"))
+                         .pixmap(QSize(32, 32), QIcon::Normal, QIcon::On);
+    if (pixmap.isNull()) {
+        pixmap = QPixmap(32, 32);
+        pixmap.fill(Qt::transparent);
+    }
     QPainter painter(&pixmap);
     painter.setBrush(color);
-    painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(3, 3, 26, 26, 7, 7);
+    painter.setPen(QPen(Qt::white, 1));
+    painter.drawEllipse(21, 21, 10, 10);
     tray_->setIcon(QIcon(pixmap));
 }
 

@@ -70,6 +70,7 @@ if(LASTFRAME_BUILD_UI)
 
         qt_add_executable(LastFrame
             src/app/main.cpp
+            logo/lastframe.qrc
             src/platform/GlobalHotkeyManager.cpp
             src/platform/AudioDeviceEnumerator.cpp
             src/platform/AudioDeviceEnumerator.h
@@ -103,6 +104,7 @@ if(LASTFRAME_BUILD_UI)
 
         if(WIN32)
             target_sources(LastFrame PRIVATE
+                logo/lastframe-icon.rc
                 src/platform/WindowsDesktopCapture.cpp
                 src/platform/WindowsDesktopCapture.h
                 src/platform/WindowsGraphicsCapture.cpp
