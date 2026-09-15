@@ -182,6 +182,10 @@ void testSettings() {
     assert(normalized.video.preset == "high");
     assert(normalized.video.customBitrateKbps == 1000);
     assert(normalized.video.maxFileSizeMiB == 4096);
+    for (const char* codec : {"h264_nvenc", "h264_amf", "h264_qsv", "h264_videotoolbox", "libx264", "libvpx-vp9"}) {
+        const auto codecSettings = Settings::fromJson({{"video", {{"codec", codec}}}});
+        assert(codecSettings.video.codec == codec);
+    }
     assert(normalized.extras.at("futureSection").at("keep") == true);
 
     {
