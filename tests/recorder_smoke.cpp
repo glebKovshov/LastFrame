@@ -23,16 +23,31 @@ int main(int argc, char* argv[]) {
     // available, then fall back to video-only capture.
     settings.audio.systemEnabled = true;
     settings.audio.microphoneEnabled = qEnvironmentVariable("LASTFRAME_SMOKE_MICROPHONE", "1") != "0";
-    // Exercise the region path on the real desktop instead of only testing
-    // the full-monitor default.
-    settings.capture.source = "custom_region";
-    settings.capture.regionX = 0;
-    settings.capture.regionY = 0;
-    settings.capture.regionWidth = 640;
-    settings.capture.regionHeight = 360;
-    settings.capture.outputWidth = 640;
-    settings.capture.outputHeight = 360;
-    settings.capture.fps = 30;
+    const bool fullMonitorProfile = qEnvironmentVariable("LASTFRAME_SMOKE_FULL_MONITOR") == QStringLiteral("1");
+    if (fullMonitorProfile) {
+        // Optional local performance profile: exercise the same native-size
+        // 60 FPS path as the user's settings without making the default smoke
+        // test depend on a high-resolution desktop.
+        settings.capture.source = "full_monitor";
+        settings.capture.outputWidth = 0;
+        settings.capture.outputHeight = 0;
+        bool fpsOk = false;
+        const int requestedFps = qEnvironmentVariable("LASTFRAME_SMOKE_FPS", "60").toInt(&fpsOk);
+        settings.capture.fps = fpsOk && requestedFps > 0 ? requestedFps : 60;
+        settings.audio.systemEnabled = false;
+        settings.audio.microphoneEnabled = false;
+    } else {
+        // Exercise the region path on the real desktop instead of only testing
+        // the full-monitor default.
+        settings.capture.source = "custom_region";
+        settings.capture.regionX = 0;
+        settings.capture.regionY = 0;
+        settings.capture.regionWidth = 640;
+        settings.capture.regionHeight = 360;
+        settings.capture.outputWidth = 640;
+        settings.capture.outputHeight = 360;
+        settings.capture.fps = 30;
+    }
     const QString requestedContainer = qEnvironmentVariable("LASTFRAME_SMOKE_CONTAINER");
     if (!requestedContainer.isEmpty()) {
         settings.video.container = requestedContainer.toStdString();
@@ -48,18 +63,25 @@ int main(int argc, char* argv[]) {
     std::set<QString> savedPaths;
     QObject::connect(&recorder, &LastFrame::Media::PortableSegmentRecorder::started,
                      &application, [&recorder] {
-                         QTimer::singleShot(1800, &recorder, [&recorder] { recorder.setMicrophoneMuted(true); });
-                         QTimer::singleShot(2600, &recorder, [&recorder] { recorder.setMicrophoneMuted(false); });
+                         const bool fullMonitor = qEnvironmentVariable("LASTFRAME_SMOKE_FULL_MONITOR") == QStringLiteral("1");
+                         if (!fullMonitor) {
+                             QTimer::singleShot(1800, &recorder, [&recorder] { recorder.setMicrophoneMuted(true); });
+                             QTimer::singleShot(2600, &recorder, [&recorder] { recorder.setMicrophoneMuted(false); });
+                         }
                          QTimer::singleShot(4500, &recorder, &LastFrame::Media::PortableSegmentRecorder::saveClip);
-                         QTimer::singleShot(4700, &recorder, &LastFrame::Media::PortableSegmentRecorder::saveClip);
-                         QTimer::singleShot(4725, &recorder, &LastFrame::Media::PortableSegmentRecorder::clearBuffer);
+                         if (!fullMonitor) {
+                             QTimer::singleShot(4700, &recorder, &LastFrame::Media::PortableSegmentRecorder::saveClip);
+                             QTimer::singleShot(4725, &recorder, &LastFrame::Media::PortableSegmentRecorder::clearBuffer);
+                         }
                      });
     QObject::connect(&recorder, &LastFrame::Media::PortableSegmentRecorder::clipSaved,
                      &application, [&application, &success, &savedPaths](const QString& path) {
                          if (QFileInfo::exists(path) && QFileInfo(path).size() > 0) {
                              savedPaths.insert(path);
+                             std::cout << "Clip: " << path.toStdString() << '\n';
                          }
-                         if (savedPaths.size() == 2) {
+                         const bool fullMonitor = qEnvironmentVariable("LASTFRAME_SMOKE_FULL_MONITOR") == QStringLiteral("1");
+                         if (savedPaths.size() == (fullMonitor ? 1U : 2U)) {
                              success = true;
                              QTimer::singleShot(250, &application, &QCoreApplication::quit);
                          }

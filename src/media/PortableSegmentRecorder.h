@@ -91,6 +91,7 @@ private:
     void discardIncompleteCaptureSegment();
     void retainSnapshot(const QStringList& files);
     void releaseSnapshot(const QStringList& files);
+    void stopCaptureProcess(int waitMs = 1500);
     void startProcess(bool withAudio, bool announceStarted = true);
     void beginExport(ExportJob* job);
     void finishExport(ExportJob* job, int exitCode, QProcess::ExitStatus status);

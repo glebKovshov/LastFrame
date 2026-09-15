@@ -95,17 +95,7 @@ PortableSegmentRecorder::PortableSegmentRecorder(QObject* parent) : QObject(pare
         windowsGraphicsCapture_->stop();
         emit message(QStringLiteral("[capture_failed] Windows Graphics Capture недоступен; возвращаюсь к FFmpeg backend: %1")
                          .arg(reason));
-        if (captureProcess_ != nullptr) {
-            QProcess* process = captureProcess_;
-            process->disconnect(this);
-            process->terminate();
-            if (!process->waitForFinished(1000)) {
-                process->kill();
-                process->waitForFinished(1000);
-            }
-            process->deleteLater();
-            captureProcess_ = nullptr;
-        }
+        stopCaptureProcess(1000);
         startProcess(processHasAudio_, false);
     });
     nativeAudio_ = std::make_unique<Platform::WindowsAudioCapture>(this);
@@ -243,11 +233,7 @@ void PortableSegmentRecorder::pause() {
             nativeAudio_->stop();
         }
 #endif
-        captureProcess_->terminate();
-        if (!captureProcess_->waitForFinished(1500)) {
-            captureProcess_->kill();
-            captureProcess_->waitForFinished(1000);
-        }
+        stopCaptureProcess(1500);
     }
     paused_ = true;
     segmentTimer_.stop();
@@ -294,25 +280,32 @@ void PortableSegmentRecorder::stop() {
         nativeAudio_->stop();
     }
 #endif
-    if (captureProcess_ != nullptr) {
-        // waitForFinished() pumps the event loop; disconnect first so the
-        // finished callback cannot clear captureProcess_ mid-cleanup.
-        QProcess* process = captureProcess_;
-        process->disconnect(this);
-        process->terminate();
-        if (!process->waitForFinished(1500)) {
-            process->kill();
-            process->waitForFinished(1000);
-        }
-        process->deleteLater();
-        captureProcess_ = nullptr;
-    }
+    stopCaptureProcess(1500);
     paused_ = false;
     gpuScalerActive_ = false;
     segmentTimer_.stop();
     if (wasActive) {
         emit stopped();
     }
+}
+
+void PortableSegmentRecorder::stopCaptureProcess(const int waitMs) {
+    if (captureProcess_ == nullptr) {
+        return;
+    }
+    // Disconnect first: waitForFinished() can process queued Qt events, and a
+    // finished signal must not race with this explicit ownership transition.
+    QProcess* process = captureProcess_;
+    process->disconnect(this);
+    if (process->state() != QProcess::NotRunning) {
+        process->terminate();
+        if (!process->waitForFinished(waitMs) && process->state() != QProcess::NotRunning) {
+            process->kill();
+            process->waitForFinished(1000);
+        }
+    }
+    process->deleteLater();
+    captureProcess_ = nullptr;
 }
 
 void PortableSegmentRecorder::clearBuffer() {
@@ -450,10 +443,11 @@ void PortableSegmentRecorder::beginExport(ExportJob* job) {
     QByteArray content("ffconcat version 1.0\n");
     for (const QString& file : std::as_const(job->snapshotFiles)) {
         content += "file '" + escapeConcatPath(file).toUtf8() + "'\n";
-        // Every closed capture segment is cut on a one-second boundary. The
-        // explicit duration gives the concat demuxer a monotonic timeline
-        // when Matroska packet timestamps restart at zero per segment.
-        content += "duration 1.0\n";
+        // Do not force a nominal one-second duration here. The segment muxer
+        // cuts on the nearest video timestamp, so a real segment can be a few
+        // milliseconds longer or shorter. The concat demuxer must read that
+        // duration from the Matroska timestamps; a hard-coded 1.0 creates
+        // overlaps/gaps (and visible judder) at every segment boundary.
     }
     if (listFile->write(content) != content.size()) {
         listFile->close();
@@ -484,17 +478,26 @@ void PortableSegmentRecorder::beginExport(ExportJob* job) {
         QStringLiteral("-f"), QStringLiteral("concat"), QStringLiteral("-safe"), QStringLiteral("0"),
         QStringLiteral("-i"), job->listPath,
     };
-    if (job->container == QStringLiteral("mkv")) {
-        // FFmpeg's Matroska muxer rejects the restarted packet timestamps
-        // from concat'ed one-second segments when they are stream-copied.
-        // Re-encode this less latency-sensitive format for a valid timeline.
+    if (job->container == QStringLiteral("webm")) {
+        args << QStringLiteral("-c:v") << QStringLiteral("libvpx-vp9")
+             << QStringLiteral("-deadline") << QStringLiteral("good")
+             << QStringLiteral("-cpu-used") << QStringLiteral("4")
+             << QStringLiteral("-crf") << QStringLiteral("30")
+             << QStringLiteral("-b:v") << QStringLiteral("0")
+             << QStringLiteral("-c:a") << QStringLiteral("libopus");
+    } else {
+        // Segment files restart their Matroska timestamps. Stream-copying
+        // that concat list preserves small gaps/overlaps at each boundary,
+        // which is visible as judder in the final clip. Re-encode to a
+        // constant-frame-rate timeline while exporting; capture itself keeps
+        // using the selected hardware encoder and is not affected by this.
         args << QStringLiteral("-c:v") << QStringLiteral("libx264")
              << QStringLiteral("-preset") << QStringLiteral("veryfast")
              << QStringLiteral("-crf") << QStringLiteral("18")
              << QStringLiteral("-c:a") << QStringLiteral("aac");
-    } else {
-        args << QStringLiteral("-c") << QStringLiteral("copy");
     }
+    args << QStringLiteral("-fps_mode") << QStringLiteral("cfr")
+         << QStringLiteral("-r") << QString::number(std::max(1, settings_.capture.fps));
     if (job->container == QStringLiteral("mp4")) {
         args << QStringLiteral("-movflags") << QStringLiteral("+faststart");
     }
@@ -517,17 +520,7 @@ void PortableSegmentRecorder::setMicrophoneMuted(const bool muted) {
     if (useNativeAudio_ && nativeAudio_ != nullptr) {
         nativeAudio_->setMicrophoneMuted(muted);
     } else if (recording_ && processHasAudio_) {
-        QProcess* process = captureProcess_;
-        if (process != nullptr) {
-            process->disconnect(this);
-            process->terminate();
-            if (!process->waitForFinished(1000)) {
-                process->kill();
-                process->waitForFinished(1000);
-            }
-            process->deleteLater();
-            captureProcess_ = nullptr;
-        }
+        stopCaptureProcess(1000);
         startProcess(true, false);
     }
 #endif
@@ -796,15 +789,25 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) {
     const bool needsScaling = outputWidth != physicalCaptureRect.width() || outputHeight != physicalCaptureRect.height();
     gpuScalerActive_ = gpuScalerCudaAvailable_ && needsScaling && codec == QStringLiteral("h264_nvenc") &&
                        container != QStringLiteral("webm") && !useSoftwareEncoder_;
-    const QString videoFilter = gpuScalerActive_
-                                    ? (desktopDuplicationInput
-                                           ? QStringLiteral("hwdownload,format=bgra,hwupload_cuda,scale_cuda=%1:%2:format=nv12")
-                                           : QStringLiteral("format=bgra,hwupload_cuda,scale_cuda=%1:%2:format=nv12"))
-                                    : desktopDuplicationInput
-                                          ? QStringLiteral("hwdownload,format=bgra,scale=%1:%2:flags=lanczos")
-                                          : QStringLiteral("scale=%1:%2:flags=lanczos");
-    args << QStringLiteral("-vf") << videoFilter.arg(outputWidth).arg(outputHeight)
-         << QStringLiteral("-c:v") << codec
+    QString videoFilter;
+    if (gpuScalerActive_) {
+        videoFilter = desktopDuplicationInput
+                          ? QStringLiteral("hwdownload,format=bgra,hwupload_cuda,scale_cuda=%1:%2:format=nv12")
+                          : QStringLiteral("format=bgra,hwupload_cuda,scale_cuda=%1:%2:format=nv12");
+    } else if (needsScaling) {
+        videoFilter = desktopDuplicationInput
+                          ? QStringLiteral("hwdownload,format=bgra,scale=%1:%2:flags=lanczos")
+                          : QStringLiteral("scale=%1:%2:flags=lanczos");
+    } else if (desktopDuplicationInput) {
+        // ddagrab produces D3D11 frames. Download only when FFmpeg needs a
+        // software frame for the encoder's pixel-format conversion; avoid a
+        // no-op Lanczos scale on every frame at native monitor resolution.
+        videoFilter = QStringLiteral("hwdownload,format=bgra");
+    }
+    if (!videoFilter.isEmpty()) {
+        args << QStringLiteral("-vf") << videoFilter.arg(outputWidth).arg(outputHeight);
+    }
+    args << QStringLiteral("-c:v") << codec
          << QStringLiteral("-b:v") << QStringLiteral("%1k").arg(bitrate);
     if (codec == QStringLiteral("h264_nvenc")) {
         args << QStringLiteral("-preset")
@@ -1027,17 +1030,7 @@ void PortableSegmentRecorder::recoverNativeCapture(const QString& reason) {
         useNativeAudio_ = false;
         attemptedNativeAudioFallback_ = true;
     }
-    if (captureProcess_ != nullptr) {
-        QProcess* process = captureProcess_;
-        process->disconnect(this);
-        process->terminate();
-        if (!process->waitForFinished(1000)) {
-            process->kill();
-            process->waitForFinished(1000);
-        }
-        process->deleteLater();
-        captureProcess_ = nullptr;
-    }
+    stopCaptureProcess(1000);
     if (nativeCaptureRecoveryAttempts_ < 3) {
         const int delays[] = {250, 500, 1000};
         const int delay = delays[nativeCaptureRecoveryAttempts_];
@@ -1087,17 +1080,7 @@ void PortableSegmentRecorder::recoverNativeAudio(const QString& reason) {
     if (useWindowsGraphicsCapture_) {
         windowsGraphicsCapture_->stop();
     }
-    if (captureProcess_ != nullptr) {
-        QProcess* process = captureProcess_;
-        process->disconnect(this);
-        process->terminate();
-        if (!process->waitForFinished(1000)) {
-            process->kill();
-            process->waitForFinished(1000);
-        }
-        process->deleteLater();
-        captureProcess_ = nullptr;
-    }
+    stopCaptureProcess(1000);
     if (nativeAudioRecoveryAttempts_ < 3) {
         const int delays[] = {250, 500, 1000};
         const int delay = delays[nativeAudioRecoveryAttempts_];
@@ -1271,11 +1254,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
         }
     }
 #endif
-    if (captureProcess_ != nullptr) {
-        captureProcess_->disconnect(this);
-        captureProcess_->terminate();
-        captureProcess_->deleteLater();
-    }
+    stopCaptureProcess(1500);
     processHasAudio_ = withAudio;
     captureProcess_ = new QProcess(this);
     captureProcess_->setProcessChannelMode(QProcess::MergedChannels);
@@ -1287,8 +1266,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
             gpuScalerActive_ = false;
             gpuScalerCudaAvailable_ = false;
             emit message(QStringLiteral("CUDA scaler не запустился; использую worker/software scaler."));
-            captureProcess_->deleteLater();
-            captureProcess_ = nullptr;
+            stopCaptureProcess(1000);
             startProcess(withAudio, announceStarted);
             return;
         }
@@ -1298,8 +1276,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
             useNativeAudio_ = false;
             attemptedNativeAudioFallback_ = true;
             emit message(QStringLiteral("Native WASAPI backend не запустился; использую FFmpeg audio backend."));
-            captureProcess_->deleteLater();
-            captureProcess_ = nullptr;
+            stopCaptureProcess(1000);
             startProcess(withAudio, announceStarted);
             return;
         }
@@ -1308,8 +1285,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
             useNativeCapture_ = false;
             attemptedNativeCaptureFallback_ = true;
             emit message(QStringLiteral("Нативный DXGI backend не запустился; использую FFmpeg capture backend."));
-            captureProcess_->deleteLater();
-            captureProcess_ = nullptr;
+            stopCaptureProcess(1000);
             startProcess(withAudio, announceStarted);
             return;
         }
@@ -1318,8 +1294,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
             useWindowsGraphicsCapture_ = false;
             attemptedWindowsGraphicsCaptureFallback_ = true;
             emit message(QStringLiteral("Windows Graphics Capture не запустился; использую FFmpeg capture backend."));
-            captureProcess_->deleteLater();
-            captureProcess_ = nullptr;
+            stopCaptureProcess(1000);
             startProcess(withAudio, announceStarted);
             return;
         }
@@ -1330,8 +1305,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
         const bool canFallbackToGdi = false;
 #endif
         emit error(QStringLiteral("[capture_failed] FFmpeg не запустился для монитора %1.").arg(selectedMonitorLabel()));
-        captureProcess_->deleteLater();
-        captureProcess_ = nullptr;
+        stopCaptureProcess(1000);
         if (canFallbackToGdi) {
             attemptedDesktopDuplicationFallback_ = true;
             useDesktopDuplication_ = false;
@@ -1370,10 +1344,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
             attemptedWindowsGraphicsCaptureFallback_ = true;
             emit message(QStringLiteral("Нативный DXGI backend не запустился; использую FFmpeg capture backend."));
         }
-        captureProcess_->terminate();
-        captureProcess_->waitForFinished(1000);
-        captureProcess_->deleteLater();
-        captureProcess_ = nullptr;
+        stopCaptureProcess(1000);
         startProcess(withAudio, announceStarted);
         return;
     }
@@ -1382,10 +1353,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
         useWindowsGraphicsCapture_ = false;
         attemptedWindowsGraphicsCaptureFallback_ = true;
         emit message(QStringLiteral("Windows Graphics Capture не запустился; использую FFmpeg capture backend."));
-        captureProcess_->terminate();
-        captureProcess_->waitForFinished(1000);
-        captureProcess_->deleteLater();
-        captureProcess_ = nullptr;
+        stopCaptureProcess(1000);
         startProcess(withAudio, announceStarted);
         return;
     }
@@ -1397,10 +1365,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
         if (useNativeCapture_) {
             nativeCapture_->stop();
         }
-        captureProcess_->terminate();
-        captureProcess_->waitForFinished(1000);
-        captureProcess_->deleteLater();
-        captureProcess_ = nullptr;
+        stopCaptureProcess(1000);
         startProcess(withAudio, announceStarted);
         return;
     }

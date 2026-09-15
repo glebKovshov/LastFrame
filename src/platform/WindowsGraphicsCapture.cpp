@@ -367,13 +367,18 @@ private:
                 });
             session.StartCapture();
 
-            const auto frameDuration = std::chrono::milliseconds(
-                std::max(1, static_cast<int>(1000 / std::max(1, config_.fps))));
+            // Keep the pacing period at sub-millisecond precision. Truncating
+            // 60 FPS to 16 ms makes the producer run at 62.5 Hz and creates
+            // irregular timestamps once FFmpeg segments the stream.
+            const auto frameDuration = std::chrono::microseconds(
+                1'000'000 / std::max(1, config_.fps));
+            const DWORD waitMilliseconds = static_cast<DWORD>(
+                std::max<std::int64_t>(1, (frameDuration.count() + 999) / 1000));
             auto nextFrame = std::chrono::steady_clock::now();
             while (WaitForSingleObject(stopEvent_, 0) != WAIT_OBJECT_0 && !captureError_) {
                 const HANDLE handles[] = {frameEvent_, stopEvent_};
                 const DWORD waitResult = WaitForMultipleObjects(2, handles, FALSE,
-                                                                 static_cast<DWORD>(frameDuration.count()));
+                                                                 waitMilliseconds);
                 if (waitResult == WAIT_OBJECT_0 + 1) {
                     break;
                 }
