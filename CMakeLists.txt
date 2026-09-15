@@ -45,6 +45,9 @@ target_compile_definitions(lastframe_core PUBLIC
     LASTFRAME_VERSION_MINOR=${PROJECT_VERSION_MINOR}
     LASTFRAME_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
+if(MSVC)
+    target_compile_options(lastframe_core PUBLIC /EHsc)
+endif()
 target_link_libraries(lastframe_core PUBLIC nlohmann_json::nlohmann_json)
 
 if(WIN32)
