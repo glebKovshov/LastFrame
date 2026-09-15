@@ -24,6 +24,10 @@
 - Added automatic NVENC to software H.264 encoder fallback.
 - Added asynchronous FFmpeg capability diagnostics before starting the buffer.
 - Added stable technical error codes for capture, audio, export, queue, hotkey and monitor failures.
+- Added stable monitor identifiers independent of geometry changes and stopped silently
+  falling back to the first display when a selected monitor is unavailable.
+- Added a Notifications settings page plus an in-app non-interactive toast overlay
+  toggle; notification preferences are persisted in the existing JSON schema.
 
 ## 0.1.0 — Windows MVP
 

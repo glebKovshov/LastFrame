@@ -76,6 +76,12 @@ MainWindow::MainWindow(QWidget* parent)
     setMinimumSize(900, 620);
     loadSettings();
     buildUi();
+    toastTimer_.setSingleShot(true);
+    connect(&toastTimer_, &QTimer::timeout, this, [this] {
+        if (toastLabel_ != nullptr) {
+            toastLabel_->hide();
+        }
+    });
     if (settingsRecovered_) {
         showToast(QStringLiteral("settings.json повреждён; создана конфигурация по умолчанию."), true);
     }
@@ -207,13 +213,14 @@ void MainWindow::buildUi() {
     const QStringList pageNames{
         QStringLiteral("Overview"), QStringLiteral("Capture"), QStringLiteral("Video"),
         QStringLiteral("Audio"), QStringLiteral("Hotkeys"), QStringLiteral("Storage"),
-        QStringLiteral("Advanced"), QStringLiteral("About"),
+        QStringLiteral("Notifications"), QStringLiteral("Advanced"), QStringLiteral("About"),
     };
     const QList<std::function<QWidget*()>> builders{
         [this] { return buildOverviewPage(); }, [this] { return buildCapturePage(); },
         [this] { return buildVideoPage(); }, [this] { return buildAudioPage(); },
         [this] { return buildHotkeysPage(); }, [this] { return buildStoragePage(); },
-        [this] { return buildAdvancedPage(); }, [this] { return buildAboutPage(); },
+        [this] { return buildNotificationsPage(); }, [this] { return buildAdvancedPage(); },
+        [this] { return buildAboutPage(); },
     };
     for (int index = 0; index < pageNames.size(); ++index) {
         auto* button = new QPushButton(pageNames.at(index), sidebar);
@@ -567,6 +574,27 @@ QWidget* MainWindow::buildStoragePage() {
     return page;
 }
 
+QWidget* MainWindow::buildNotificationsPage() {
+    auto* page = new QWidget(this);
+    auto* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(42, 36, 42, 36);
+    layout->addWidget(heading(QStringLiteral("Notifications"), page));
+    layout->addWidget(description(QStringLiteral("Настройте локальные уведомления LastFrame. Звуковая обратная связь не используется."), page));
+    auto* form = new QFormLayout;
+    auto* enabled = new QCheckBox(QStringLiteral("Показывать уведомления"), page);
+    enabled->setChecked(settings_.notifications.enabled);
+    form->addRow(QStringLiteral("Системные уведомления"), enabled);
+    auto* overlay = new QCheckBox(QStringLiteral("Показывать угловой overlay в окне приложения"), page);
+    overlay->setChecked(settings_.notifications.overlayEnabled);
+    form->addRow(QStringLiteral("Toast overlay"), overlay);
+    layout->addLayout(form);
+    layout->addWidget(description(QStringLiteral("Системные toast-сообщения выводятся через трей. Overlay не перехватывает мышь и не используется как игровой HUD."), page));
+    layout->addStretch();
+    connect(enabled, &QCheckBox::toggled, this, [this](bool value) { settings_.notifications.enabled = value; });
+    connect(overlay, &QCheckBox::toggled, this, [this](bool value) { settings_.notifications.overlayEnabled = value; });
+    return page;
+}
+
 QWidget* MainWindow::buildAdvancedPage() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
@@ -633,6 +661,14 @@ void MainWindow::startOrStop() {
         const int monitorIndex = monitorCombo_ == nullptr ? -1 : monitorCombo_->currentIndex();
         if (monitorIndex < 0 || monitorIndex >= monitors_.size()) {
             showToast(QStringLiteral("Нельзя начать буфер: монитор не выбран."), true);
+            return;
+        }
+        const QString selectedMonitorId = QString::fromStdString(settings_.capture.monitorId);
+        if (!selectedMonitorId.isEmpty() && selectedMonitorId.compare(QStringLiteral("auto"), Qt::CaseInsensitive) != 0 &&
+            !std::any_of(monitors_.cbegin(), monitors_.cend(), [&selectedMonitorId](const Platform::MonitorInfo& monitor) {
+                return monitor.id == selectedMonitorId;
+            })) {
+            showToast(QStringLiteral("Выбранный монитор недоступен. Выберите доступный монитор заново."), true);
             return;
         }
         settings_.capture.fps = fpsSpin_ == nullptr ? settings_.capture.fps : fpsSpin_->value();
@@ -876,6 +912,24 @@ void MainWindow::saveSettings() {
 void MainWindow::showToast(const QString& text, const bool isError) {
     statusDetails_->setText(text);
     statusLabel_->setStyleSheet(isError ? QStringLiteral("color: #D94841;") : QStringLiteral("color: #ED760E;"));
+    if (!settings_.notifications.enabled || !settings_.notifications.overlayEnabled) {
+        return;
+    }
+    if (toastLabel_ == nullptr) {
+        toastLabel_ = new QLabel(this);
+        toastLabel_->setAttribute(Qt::WA_TransparentForMouseEvents);
+        toastLabel_->setMargin(12);
+        toastLabel_->setWordWrap(true);
+    }
+    toastLabel_->setStyleSheet(QStringLiteral("QLabel { background: %1; color: white; border-radius: 10px; padding: 10px 14px; }")
+                                   .arg(isError ? QStringLiteral("#8F2D24") : QStringLiteral("#4A4A4A")));
+    toastLabel_->setText(text);
+    toastLabel_->adjustSize();
+    const int margin = 20;
+    toastLabel_->move(std::max(margin, width() - toastLabel_->width() - margin), margin);
+    toastLabel_->show();
+    toastLabel_->raise();
+    toastTimer_.start(3500);
 }
 
 void MainWindow::setupTray() {
@@ -936,6 +990,7 @@ void MainWindow::populateMonitorCombo() {
     if (monitorCombo_ == nullptr) {
         return;
     }
+    const QSignalBlocker blocker(monitorCombo_);
     monitorCombo_->clear();
     for (const auto& monitor : monitors_) {
         monitorCombo_->addItem(QStringLiteral("%1 — %2x%3 @ %4 Hz")
@@ -949,6 +1004,8 @@ void MainWindow::populateMonitorCombo() {
         monitors_, QString::fromStdString(settings_.capture.monitorId));
     if (selected >= 0) {
         monitorCombo_->setCurrentIndex(selected);
+    } else if (!monitors_.isEmpty()) {
+        monitorCombo_->setCurrentIndex(0);
     }
 }
 

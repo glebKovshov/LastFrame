@@ -64,6 +64,7 @@ private:
     QWidget* buildAudioPage();
     QWidget* buildHotkeysPage();
     QWidget* buildStoragePage();
+    QWidget* buildNotificationsPage();
     QWidget* buildAdvancedPage();
     QWidget* buildAboutPage();
     void addPageButton(const QString& title, int pageIndex);
@@ -114,8 +115,10 @@ private:
     QPushButton* diagnosticsButton_ = nullptr;
     QSystemTrayIcon* tray_ = nullptr;
     QAction* trayMuteAction_ = nullptr;
+    QLabel* toastLabel_ = nullptr;
     QTimer monitorTimer_;
     QTimer autoResumeTimer_;
+    QTimer toastTimer_;
     QString monitorSignature_;
     QString autoResumeSignature_;
     QUrl latestReleaseUrl_;

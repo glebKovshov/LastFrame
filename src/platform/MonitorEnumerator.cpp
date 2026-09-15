@@ -12,12 +12,11 @@ QVector<MonitorInfo> MonitorEnumerator::enumerate() {
     for (const QScreen* screen : screens) {
         const QRect geometry = screen->geometry();
         MonitorInfo monitor;
-        monitor.id = QStringLiteral("%1:%2,%3,%4x%5")
-                         .arg(screen->name())
-                         .arg(geometry.x())
-                         .arg(geometry.y())
-                         .arg(geometry.width())
-                         .arg(geometry.height());
+        const QString screenName = screen->name().trimmed();
+        const QString serial = screen->serialNumber().trimmed();
+        monitor.id = QStringLiteral("display:%1%2")
+                         .arg(screenName.isEmpty() ? QStringLiteral("unknown") : screenName,
+                              serial.isEmpty() ? QString() : QStringLiteral(":%1").arg(serial));
         monitor.name = screen->name().isEmpty() ? QStringLiteral("Display") : screen->name();
         monitor.geometry = geometry;
         monitor.resolution = screen->size();
@@ -37,7 +36,7 @@ int MonitorEnumerator::indexForId(const QVector<MonitorInfo>& monitors, const QS
             return index;
         }
     }
-    return monitors.isEmpty() ? -1 : 0;
+    return -1;
 }
 
 } // namespace LastFrame::Platform

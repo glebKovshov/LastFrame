@@ -155,6 +155,14 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
         emit error(QStringLiteral("[encoder_unavailable] FFmpeg не найден. Поместите ffmpeg.exe рядом с LastFrame.exe или добавьте его в PATH."));
         return;
     }
+    const auto monitors = Platform::MonitorEnumerator::enumerate();
+    const QString selectedMonitorId = QString::fromStdString(settings_.capture.monitorId);
+    if (monitors.isEmpty() ||
+        (!selectedMonitorId.isEmpty() && selectedMonitorId.compare(QStringLiteral("auto"), Qt::CaseInsensitive) != 0 &&
+         Platform::MonitorEnumerator::indexForId(monitors, selectedMonitorId) < 0)) {
+        emit error(QStringLiteral("[capture_failed] Выбранный монитор недоступен. Обновите список мониторов и выберите его заново."));
+        return;
+    }
 
     segmentDirectory_ = settings_.buffer.temporaryDirectory.empty()
                             ? QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/segments"
@@ -721,7 +729,10 @@ QString PortableSegmentRecorder::selectedMonitorLabel() const {
     const auto monitors = Platform::MonitorEnumerator::enumerate();
     const int index = Platform::MonitorEnumerator::indexForId(
         monitors, QString::fromStdString(settings_.capture.monitorId));
-    return monitors.value(std::max(0, index)).name;
+    if (index >= 0 && index < monitors.size()) {
+        return monitors.at(index).name;
+    }
+    return monitors.isEmpty() ? QStringLiteral("неизвестен") : monitors.first().name;
 }
 
 bool PortableSegmentRecorder::prepareNativeCapture() {
