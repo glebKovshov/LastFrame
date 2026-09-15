@@ -744,6 +744,14 @@ QWidget* MainWindow::buildStoragePage() {
         storageState->setText(state);
     };
     refreshStorage();
+    const QString temporaryPath = recorder_.temporaryDirectory().isEmpty()
+                                      ? QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/segments"
+                                      : recorder_.temporaryDirectory();
+    auto* temporary = new QLabel(QStringLiteral("Временные сегменты: %1").arg(temporaryPath), page);
+    temporary->setWordWrap(true);
+    layout->addWidget(temporary);
+    auto* clearTemporary = new QPushButton(QStringLiteral("Очистить временные сегменты и буфер"), page);
+    layout->addWidget(clearTemporary);
     layout->addWidget(description(QStringLiteral("Можно выбрать только локальный фиксированный диск. Сетевые и съёмные носители блокируются; временные сегменты остаются в локальном каталоге приложения."), page));
     layout->addStretch();
     connect(choose, &QPushButton::clicked, this, [this, page, choose, refreshStorage] {
@@ -769,6 +777,7 @@ QWidget* MainWindow::buildStoragePage() {
         QDir().mkpath(directory);
         QDesktopServices::openUrl(QUrl::fromLocalFile(directory));
     });
+    connect(clearTemporary, &QPushButton::clicked, this, &MainWindow::clearBuffer);
     return page;
 }
 
@@ -875,6 +884,9 @@ QWidget* MainWindow::buildAdvancedPage() {
     layout->addWidget(updateButton_);
     diagnosticsButton_ = new QPushButton(QStringLiteral("Скопировать диагностику"), page);
     layout->addWidget(diagnosticsButton_);
+    auto* openLog = new QPushButton(QStringLiteral("Открыть локальный лог"), page);
+    layout->addWidget(openLog);
+    layout->addWidget(description(QStringLiteral("Лог содержит только технические события и не записывает кадры, звук или содержимое окон: %1").arg(Platform::Diagnostics::logPath()), page));
     layout->addWidget(description(QStringLiteral("Телеметрия отключена. Проверка обновлений будет ручной через GitHub Releases и по умолчанию отключена."), page));
     layout->addStretch();
     connect(themeCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::chooseTheme);
@@ -882,6 +894,12 @@ QWidget* MainWindow::buildAdvancedPage() {
             [this](int value) { settings_.buffer.ramLimitMiB = value; });
     connect(updateButton_, &QPushButton::clicked, this, &MainWindow::checkForUpdates);
     connect(diagnosticsButton_, &QPushButton::clicked, this, &MainWindow::copyDiagnostics);
+    connect(openLog, &QPushButton::clicked, this, [] {
+        const QString path = Platform::Diagnostics::logPath();
+        if (!path.isEmpty()) {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+        }
+    });
     return page;
 }
 
