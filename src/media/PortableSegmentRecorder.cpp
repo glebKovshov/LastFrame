@@ -47,7 +47,7 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
     settings_ = settings;
     ffmpegPath_ = locateFfmpeg();
     if (ffmpegPath_.isEmpty()) {
-        emit error(QStringLiteral("FFmpeg не найден. Поместите ffmpeg.exe рядом с LastFrame.exe или добавьте его в PATH."));
+        emit error(QStringLiteral("[encoder_unavailable] FFmpeg не найден. Поместите ffmpeg.exe рядом с LastFrame.exe или добавьте его в PATH."));
         return;
     }
 
@@ -140,7 +140,7 @@ void PortableSegmentRecorder::clearBuffer() {
 void PortableSegmentRecorder::saveClip() {
     using namespace std::chrono;
     if (rateLimiter_.tryAccept(steady_clock::now()) == Core::RateLimitResult::Cooldown) {
-        emit error(QStringLiteral("Слишком много сохранений. Новые снимки временно заблокированы на 5 секунд."));
+        emit error(QStringLiteral("[rate_limit] Слишком много сохранений. Новые снимки временно заблокированы на 5 секунд."));
         return;
     }
 
@@ -151,11 +151,11 @@ void PortableSegmentRecorder::saveClip() {
         files.removeLast();
     }
     if (files.isEmpty()) {
-        emit error(QStringLiteral("В буфере пока нет готовых сегментов."));
+        emit error(QStringLiteral("[buffer_empty] В буфере пока нет готовых сегментов."));
         return;
     }
     if (exports_.size() >= settings_.storage.maxQueueLength) {
-        emit error(QStringLiteral("Очередь экспорта заполнена. Дождитесь завершения предыдущих клипов."));
+        emit error(QStringLiteral("[queue_overflow] Очередь экспорта заполнена. Дождитесь завершения предыдущих клипов."));
         return;
     }
 
@@ -173,7 +173,7 @@ void PortableSegmentRecorder::saveClip() {
     const QString finalPath = QString::fromStdString(target.string());
     QFile reservation(finalPath);
     if (!reservation.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
-        emit error(QStringLiteral("Не удалось зарезервировать имя итогового клипа."));
+        emit error(QStringLiteral("[export_failed] Не удалось зарезервировать имя итогового клипа."));
         return;
     }
     reservation.close();
@@ -183,7 +183,7 @@ void PortableSegmentRecorder::saveClip() {
     if (!listFile->open()) {
         QFile::remove(finalPath);
         listFile->deleteLater();
-        emit error(QStringLiteral("Не удалось создать список сегментов для экспорта."));
+        emit error(QStringLiteral("[export_failed] Не удалось создать список сегментов для экспорта."));
         return;
     }
     QByteArray content("ffconcat version 1.0\n");
@@ -211,7 +211,7 @@ void PortableSegmentRecorder::saveClip() {
     connect(job->process, &QProcess::finished, this,
             [this, job](int code, QProcess::ExitStatus status) { finishExport(job, code, status); });
     connect(job->process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
-        emit error(QStringLiteral("FFmpeg не смог запустить экспорт клипа."));
+        emit error(QStringLiteral("[export_failed] FFmpeg не смог запустить экспорт клипа."));
     });
 
     QStringList args{
@@ -256,13 +256,13 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
     if (recording_ && exitCode != 0 && processHasAudio_ && !attemptedVideoOnlyFallback_) {
         if (captureSystemAudio_) {
             captureSystemAudio_ = false;
-            emit message(QStringLiteral("Системный звук недоступен; продолжаю с доступным микрофоном или видео. %1")
+            emit message(QStringLiteral("[audio_device_lost] Системный звук недоступен; продолжаю с доступным микрофоном или видео. %1")
                              .arg(processOutput.left(240).simplified()));
             startProcess(true, false);
             return;
         }
         attemptedVideoOnlyFallback_ = true;
-        emit message(QStringLiteral("Аудио недоступно; повторяю захват только с видео. %1")
+        emit message(QStringLiteral("[audio_device_lost] Аудио недоступно; повторяю захват только с видео. %1")
                          .arg(processOutput.left(240).simplified()));
         startProcess(false, false);
         return;
@@ -284,7 +284,7 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
         return;
     }
     if (recording_ && exitCode != 0) {
-        emit error(QStringLiteral("Захват завершился с ошибкой: %1").arg(processOutput.left(300)));
+        emit error(QStringLiteral("[capture_failed] Захват завершился с ошибкой: %1").arg(processOutput.left(300)));
     }
     recording_ = false;
     segmentTimer_.stop();
@@ -302,7 +302,7 @@ void PortableSegmentRecorder::processError(const QProcess::ProcessError errorCod
         return;
     }
     Q_UNUSED(errorCode)
-    emit error(QStringLiteral("Не удалось запустить FFmpeg для захвата экрана."));
+    emit error(QStringLiteral("[capture_failed] Не удалось запустить FFmpeg для захвата экрана."));
 }
 
 QString PortableSegmentRecorder::locateFfmpeg() const {
@@ -531,7 +531,7 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
     captureProcess_->start(ffmpegPath_, captureArguments(withAudio));
     if (!captureProcess_->waitForStarted(3000)) {
         const bool canFallbackToGdi = useDesktopDuplication_ && !attemptedDesktopDuplicationFallback_;
-        emit error(QStringLiteral("FFmpeg не запустился для монитора %1.").arg(selectedMonitorLabel()));
+        emit error(QStringLiteral("[capture_failed] FFmpeg не запустился для монитора %1.").arg(selectedMonitorLabel()));
         captureProcess_->deleteLater();
         captureProcess_ = nullptr;
         if (canFallbackToGdi) {
@@ -574,16 +574,16 @@ void PortableSegmentRecorder::finishExport(ExportJob* job, const int exitCode,
             QFileInfo(job->temporaryPath).size() > static_cast<qint64>(settings_.video.maxFileSizeMiB) * 1024 * 1024) {
             QFile::remove(job->temporaryPath);
             QFile::remove(job->finalPath);
-            emit error(QStringLiteral("Клип превысил установленный лимит размера файла."));
+            emit error(QStringLiteral("[file_size_limit] Клип превысил установленный лимит размера файла."));
         } else if (QFile::remove(job->finalPath) && QFile::rename(job->temporaryPath, job->finalPath)) {
             emit clipSaved(job->finalPath);
         } else {
-            emit error(QStringLiteral("Не удалось атомарно переименовать готовый клип."));
+            emit error(QStringLiteral("[export_failed] Не удалось атомарно переименовать готовый клип."));
         }
     } else {
         QFile::remove(job->temporaryPath);
         QFile::remove(job->finalPath);
-        emit error(QStringLiteral("Экспорт клипа завершился ошибкой: %1").arg(output.left(300)));
+        emit error(QStringLiteral("[export_failed] Экспорт клипа завершился ошибкой: %1").arg(output.left(300)));
     }
     if (job->listFile != nullptr) {
         job->listFile->close();

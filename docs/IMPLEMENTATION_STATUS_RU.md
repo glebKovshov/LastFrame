@@ -26,6 +26,9 @@
 - Поиск аудиоустройств через FFmpeg: системный WASAPI output и микрофоны DirectShow,
   выбор устройства, независимая громкость и fallback system → microphone → video.
 - Encoder fallback: при ошибке Auto/NVENC повторяется запуск с software H.264.
+- Ошибки recorder/hotkey/update имеют стабильные технические коды для диагностики:
+  `capture_failed`, `audio_device_lost`, `encoder_unavailable`, `export_failed`,
+  `queue_overflow`, `hotkey_conflict`, `monitor_changed`.
 - Ручная проверка GitHub Releases через `api.github.com`, без фоновой телеметрии или автообновления.
 - Асинхронный FFmpeg capability probe в Advanced: Desktop Duplication/GDI,
   audio devices и доступные encoder profiles отображаются до запуска буфера.

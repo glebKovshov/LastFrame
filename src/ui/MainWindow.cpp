@@ -711,7 +711,7 @@ void MainWindow::refreshMonitors() {
     monitors_ = detected;
     if (changed && recorder_.isRecording()) {
         recorder_.stop();
-        showToast(QStringLiteral("Монитор или его режим изменился. Буфер остановлен; проверьте настройки и запустите снова."), true);
+            showToast(QStringLiteral("[monitor_changed] Монитор или его режим изменился. Буфер остановлен; проверьте настройки и запустите снова."), true);
     }
     populateMonitorCombo();
 }

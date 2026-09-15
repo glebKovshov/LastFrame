@@ -44,7 +44,7 @@ void UpdateChecker::check() {
             if (status == 404) {
                 emit noRelease();
             } else {
-                emit error(QStringLiteral("Проверка обновлений не выполнена: %1").arg(reply->errorString()));
+                emit error(QStringLiteral("[update_check_failed] Проверка обновлений не выполнена: %1").arg(reply->errorString()));
             }
             reply->deleteLater();
             return;
@@ -53,7 +53,7 @@ void UpdateChecker::check() {
         QJsonParseError parseError{};
         const QJsonDocument document = QJsonDocument::fromJson(payload, &parseError);
         if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-            emit error(QStringLiteral("GitHub вернул некорректный ответ обновления."));
+            emit error(QStringLiteral("[update_check_failed] GitHub вернул некорректный ответ обновления."));
             reply->deleteLater();
             return;
         }
@@ -66,7 +66,7 @@ void UpdateChecker::check() {
         const QVersionNumber current = QVersionNumber::fromString(QCoreApplication::applicationVersion());
         const QUrl releaseUrl(object.value(QStringLiteral("html_url")).toString());
         if (latest.isNull() || releaseUrl.isEmpty()) {
-            emit error(QStringLiteral("В ответе GitHub отсутствует версия release."));
+            emit error(QStringLiteral("[update_check_failed] В ответе GitHub отсутствует версия release."));
         } else if (latest > current) {
             emit updateAvailable(QStringLiteral("v%1").arg(tag), releaseUrl);
         } else {

@@ -99,11 +99,11 @@ bool GlobalHotkeyManager::registerOne(const int id, const HotkeyAction action,
     UINT modifiers = 0;
     UINT key = 0;
     if (!parseHotkey(sequence, modifiers, key)) {
-        emit registrationError(QStringLiteral("Invalid global hotkey: %1").arg(sequence));
+        emit registrationError(QStringLiteral("[hotkey_conflict] Invalid global hotkey: %1").arg(sequence));
         return false;
     }
     if (!RegisterHotKey(nullptr, id, modifiers | MOD_NOREPEAT, key)) {
-        emit registrationError(QStringLiteral("Global hotkey is unavailable: %1").arg(sequence));
+        emit registrationError(QStringLiteral("[hotkey_conflict] Global hotkey is unavailable: %1").arg(sequence));
         return false;
     }
     registered_.push_back({id, action});
@@ -112,7 +112,7 @@ bool GlobalHotkeyManager::registerOne(const int id, const HotkeyAction action,
     Q_UNUSED(id)
     Q_UNUSED(action)
     Q_UNUSED(sequence)
-    emit registrationError(QStringLiteral("Global hotkeys are not implemented on this platform yet."));
+    emit registrationError(QStringLiteral("[hotkey_conflict] Global hotkeys are not implemented on this platform yet."));
     return false;
 #endif
 }
