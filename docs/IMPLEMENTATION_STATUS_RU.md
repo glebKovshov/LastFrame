@@ -68,6 +68,9 @@
 - Windows lock/sleep/hibernate обрабатываются через power/session events: native
   session освобождается паузой, а после unlock/resume используется Auto resume с
   debounce 2 секунды.
+- При потере native DXGI-сессии выполняются три попытки восстановления с backoff
+  250/500/1000 ms, затем применяется WGC/portable fallback; процесс FFmpeg
+  безопасно перезапускается без удаления старых клипов.
 - Страница Notifications с настройками системных уведомлений и click-through
   corner toast overlay с анимированным индикатором; на Windows overlay запрашивает
   `WDA_EXCLUDEFROMCAPTURE`, настройки сохраняются в JSON.
@@ -77,10 +80,10 @@
 
 1. Интеграционная проверка на конкретных capture backend'ах, что исключение
    overlay действительно соблюдается, и тесты DRM/HDR capability states.
-2. Device-loss recovery с попытками переподключения и backoff; текущий
-   native WASAPI path уже передаёт mixed PCM в encoder, имеет silence-fill,
-   fallback на portable FFmpeg audio и runtime mute/unmute microphone через
-   global hotkey и tray action.
+2. Audio endpoint-specific reattach/retry после исчезновения и возврата устройства;
+   текущий native WASAPI path уже передаёт mixed PCM в encoder, имеет silence-fill,
+   degradation без падения второго источника, fallback на portable FFmpeg audio и
+   runtime mute/unmute microphone через global hotkey и tray action.
 3. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
 4. Завершить DPI-specific validation для high-DPI monitor geometry и native
    macOS ScreenCaptureKit/Linux PipeWire/portal backends.

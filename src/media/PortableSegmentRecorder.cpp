@@ -31,46 +31,7 @@ PortableSegmentRecorder::PortableSegmentRecorder(QObject* parent) : QObject(pare
         if (!recording_ || !useNativeCapture_) {
             return;
         }
-        attemptedNativeCaptureFallback_ = true;
-        useNativeCapture_ = false;
-        nativeCapture_->stop();
-        if (useNativeAudio_) {
-            nativeAudio_->stop();
-            useNativeAudio_ = false;
-            attemptedNativeAudioFallback_ = true;
-        }
-        if (!attemptedWindowsGraphicsCaptureFallback_ && prepareWindowsGraphicsCapture()) {
-            useWindowsGraphicsCapture_ = true;
-            emit message(QStringLiteral("DXGI Desktop Duplication недоступен; переключаюсь на Windows Graphics Capture."));
-            if (captureProcess_ != nullptr) {
-                QProcess* process = captureProcess_;
-                process->disconnect(this);
-                process->terminate();
-                if (!process->waitForFinished(1000)) {
-                    process->kill();
-                    process->waitForFinished(1000);
-                }
-                process->deleteLater();
-                captureProcess_ = nullptr;
-            }
-            startProcess(processHasAudio_, false);
-            return;
-        }
-        attemptedWindowsGraphicsCaptureFallback_ = true;
-        emit message(QStringLiteral("[capture_failed] Нативный DXGI-захват недоступен; возвращаюсь к FFmpeg backend: %1")
-                         .arg(reason));
-        if (captureProcess_ != nullptr) {
-            QProcess* process = captureProcess_;
-            process->disconnect(this);
-            process->terminate();
-            if (!process->waitForFinished(1000)) {
-                process->kill();
-                process->waitForFinished(1000);
-            }
-            process->deleteLater();
-            captureProcess_ = nullptr;
-        }
-        startProcess(processHasAudio_, false);
+        recoverNativeCapture(reason);
     });
     windowsGraphicsCapture_ = std::make_unique<Platform::WindowsGraphicsCapture>(this);
     connect(windowsGraphicsCapture_.get(), &Platform::WindowsGraphicsCapture::failed, this, [this](const QString& reason) {
@@ -192,6 +153,7 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
     attemptedDesktopDuplicationFallback_ = false;
     useNativeCapture_ = false;
     attemptedNativeCaptureFallback_ = false;
+    nativeCaptureRecoveryAttempts_ = 0;
     useWindowsGraphicsCapture_ = false;
     attemptedWindowsGraphicsCaptureFallback_ = false;
     useNativeAudio_ = false;
@@ -255,6 +217,9 @@ void PortableSegmentRecorder::resume() {
     discoverMicrophoneDevice();
 #if defined(Q_OS_WIN)
     useNativeCapture_ = !attemptedNativeCaptureFallback_ && prepareNativeCapture();
+    if (useNativeCapture_) {
+        nativeCaptureRecoveryAttempts_ = 0;
+    }
     useWindowsGraphicsCapture_ = !useNativeCapture_ && !attemptedWindowsGraphicsCaptureFallback_ &&
                                  prepareWindowsGraphicsCapture();
     useNativeAudio_ = !attemptedNativeAudioFallback_ && prepareNativeAudio();
@@ -818,6 +783,65 @@ bool PortableSegmentRecorder::tryNextAutomaticEncoder() {
                             QStringLiteral("Apple VideoToolbox")};
     emit message(QStringLiteral("Hardware H.264 backend недоступен; пробую %1.").arg(names.value(automaticEncoderAttempt_)));
     return true;
+}
+
+void PortableSegmentRecorder::recoverNativeCapture(const QString& reason) {
+#if defined(Q_OS_WIN)
+    if (!recording_) {
+        return;
+    }
+    useNativeCapture_ = false;
+    nativeCapture_->stop();
+    if (useNativeAudio_) {
+        nativeAudio_->stop();
+        useNativeAudio_ = false;
+        attemptedNativeAudioFallback_ = true;
+    }
+    if (captureProcess_ != nullptr) {
+        QProcess* process = captureProcess_;
+        process->disconnect(this);
+        process->terminate();
+        if (!process->waitForFinished(1000)) {
+            process->kill();
+            process->waitForFinished(1000);
+        }
+        process->deleteLater();
+        captureProcess_ = nullptr;
+    }
+    if (nativeCaptureRecoveryAttempts_ < 3) {
+        const int delays[] = {250, 500, 1000};
+        const int delay = delays[nativeCaptureRecoveryAttempts_];
+        ++nativeCaptureRecoveryAttempts_;
+        emit message(QStringLiteral("[capture_failed] Потеряна native DXGI-сессия; повтор %1/3 через %2 ms.")
+                         .arg(nativeCaptureRecoveryAttempts_)
+                         .arg(delay));
+        QTimer::singleShot(delay, this, [this, reason] {
+            if (!recording_) {
+                return;
+            }
+            if (prepareNativeCapture()) {
+                useNativeCapture_ = true;
+                startProcess(processHasAudio_, false);
+            } else {
+                recoverNativeCapture(reason);
+            }
+        });
+        return;
+    }
+    attemptedNativeCaptureFallback_ = true;
+    if (!attemptedWindowsGraphicsCaptureFallback_ && prepareWindowsGraphicsCapture()) {
+        useWindowsGraphicsCapture_ = true;
+        emit message(QStringLiteral("DXGI Desktop Duplication не восстановился; переключаюсь на Windows Graphics Capture."));
+        startProcess(processHasAudio_, false);
+        return;
+    }
+    attemptedWindowsGraphicsCaptureFallback_ = true;
+    emit message(QStringLiteral("[capture_failed] Native capture не восстановился; возвращаюсь к FFmpeg backend: %1")
+                     .arg(reason));
+    startProcess(processHasAudio_, false);
+#else
+    Q_UNUSED(reason)
+#endif
 }
 
 bool PortableSegmentRecorder::prepareNativeCapture() {
