@@ -10,6 +10,8 @@
 - Added native Windows DXGI Desktop Duplication through D3D11 staging and a
   constant-FPS raw-BGRA pipe, including cursor overlay and automatic fallback
   to the portable FFmpeg capture path.
+- Added a native Windows Graphics Capture fallback using C++/WinRT and D3D11,
+  preserving monitor/region crop, cursor capture and constant-FPS raw-BGRA input.
 - Added the Qt-free master-clock AudioMixer primitive with silence fill,
   independent gain/mute, resampling, clipping and unit coverage.
 - Connected native Windows WASAPI loopback and microphone capture to the

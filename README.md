@@ -59,7 +59,7 @@ Portable Windows ZIP собирается воспроизводимым скр�
 на Apple Silicon (включая M1). В текущем срезе полностью проверен Windows
 portable-путь; native macOS/Linux backends ещё не подключены.
 
-Native Windows DXGI Desktop Duplication уже подключён через D3D11 staging/raw-BGRA pipe; native WASAPI loopback и microphone capture сводятся через `AudioMixer` в f32le pipe. При отказе native capture/audio автоматически используются portable FFmpeg backend’ы, включая `ddagrab`/`gdigrab` и доступный audio input. Mute/unmute microphone работает через global hotkey и tray action. Windows Graphics Capture fallback, device-loss recovery с автоматическим resume, прямые FFmpeg libraries и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
+Native Windows DXGI Desktop Duplication уже подключён через D3D11 staging/raw-BGRA pipe, а при отказе DXGI используется Windows Graphics Capture с тем же crop/cursor/raw-video контрактом. Native WASAPI loopback и microphone capture сводятся через `AudioMixer` в f32le pipe. При недоступности native capture/audio автоматически используются portable FFmpeg backend’ы, включая `ddagrab`/`gdigrab` и доступный audio input. Mute/unmute microphone работает через global hotkey и tray action. Device-loss recovery с автоматическим resume, HDR/DRM capability states, прямые FFmpeg libraries и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
 
 ## Публикация
 

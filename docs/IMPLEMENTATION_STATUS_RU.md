@@ -27,6 +27,9 @@
   texture, crop выбранного монитора/региона, cursor overlay, постоянный FPS на
   статичном рабочем столе и raw-video pipe в FFmpeg; при ошибке возвращается к
   portable FFmpeg backend.
+- Native Windows Graphics Capture fallback через C++/WinRT + D3D11: тот же
+  monitor/region crop, cursor capture, постоянный FPS и raw-BGRA pipe; при
+  ошибке возвращается к portable FFmpeg backend.
 - Поиск аудиоустройств через FFmpeg: системный WASAPI output и микрофоны DirectShow,
   выбор устройства, независимая громкость и fallback system → microphone → video.
 - Encoder fallback: при ошибке Auto/NVENC повторяется запуск с software H.264.
@@ -46,8 +49,8 @@
 
 ## Следующие обязательные срезы по ТЗ
 
-1. Windows Graphics Capture fallback для native backend, а также проверка HDR/DRM
-   сценариев и явные capability/error states для недоступных поверхностей.
+1. HDR/DRM сценарии и явные capability/error states для недоступных или
+   защищённых поверхностей; отдельная проверка SDR-конверсии HDR.
 2. Device-loss recovery с попытками переподключения и auto-resume; текущий
    native WASAPI path уже передаёт mixed PCM в encoder, имеет silence-fill,
    fallback на portable FFmpeg audio и runtime mute/unmute microphone через
@@ -57,5 +60,5 @@
 5. Интеграционные тесты на RTX 3070 и матрица Windows/Linux/macOS arm64.
 
 До реализации следующих срезов UI честно показывает, что segment recorder
-требует доступный FFmpeg; native DXGI и native WASAPI capability включаются
+требует доступный FFmpeg; native DXGI/WGC и native WASAPI capability включаются
 автоматически на Windows, а при недоступности остаются portable FFmpeg fallback.

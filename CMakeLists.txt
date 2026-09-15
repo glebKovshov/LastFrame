@@ -102,10 +102,17 @@ if(LASTFRAME_BUILD_UI)
             target_sources(LastFrame PRIVATE
                 src/platform/WindowsDesktopCapture.cpp
                 src/platform/WindowsDesktopCapture.h
+                src/platform/WindowsGraphicsCapture.cpp
+                src/platform/WindowsGraphicsCapture.h
                 src/platform/WindowsAudioCapture.cpp
                 src/platform/WindowsAudioCapture.h
             )
-            target_link_libraries(LastFrame PRIVATE user32 shell32 ole32 avrt d3d11 dxgi gdi32)
+            file(GLOB LASTFRAME_CPPWINRT_INCLUDE_DIRS
+                 "C:/Program Files (x86)/Windows Kits/10/Include/*/cppwinrt")
+            list(SORT LASTFRAME_CPPWINRT_INCLUDE_DIRS COMPARE NATURAL ORDER DESCENDING)
+            list(GET LASTFRAME_CPPWINRT_INCLUDE_DIRS 0 LASTFRAME_CPPWINRT_INCLUDE_DIR)
+            target_include_directories(LastFrame PRIVATE "${LASTFRAME_CPPWINRT_INCLUDE_DIR}")
+            target_link_libraries(LastFrame PRIVATE user32 shell32 ole32 avrt d3d11 dxgi gdi32 runtimeobject)
         endif()
 
         set_target_properties(LastFrame PROPERTIES
@@ -132,10 +139,13 @@ if(LASTFRAME_BUILD_UI)
                 target_sources(lastframe_recorder_smoke PRIVATE
                     src/platform/WindowsDesktopCapture.cpp
                     src/platform/WindowsDesktopCapture.h
+                    src/platform/WindowsGraphicsCapture.cpp
+                    src/platform/WindowsGraphicsCapture.h
                     src/platform/WindowsAudioCapture.cpp
                     src/platform/WindowsAudioCapture.h
                 )
-                target_link_libraries(lastframe_recorder_smoke PRIVATE avrt d3d11 dxgi gdi32 user32)
+                target_include_directories(lastframe_recorder_smoke PRIVATE "${LASTFRAME_CPPWINRT_INCLUDE_DIR}")
+                target_link_libraries(lastframe_recorder_smoke PRIVATE avrt d3d11 dxgi gdi32 user32 runtimeobject)
             endif()
             # This test captures the real desktop and is intentionally kept
             # as a manual target, not registered in CTest/CI.

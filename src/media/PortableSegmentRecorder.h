@@ -15,6 +15,7 @@ class QTemporaryFile;
 namespace LastFrame::Platform {
 class WindowsDesktopCapture;
 class WindowsAudioCapture;
+class WindowsGraphicsCapture;
 }
 
 namespace LastFrame::Media {
@@ -71,6 +72,7 @@ private:
     [[nodiscard]] QString escapeConcatPath(const QString& path) const;
     [[nodiscard]] QString selectedMonitorLabel() const;
     [[nodiscard]] bool prepareNativeCapture();
+    [[nodiscard]] bool prepareWindowsGraphicsCapture();
     [[nodiscard]] bool prepareNativeAudio();
     void discoverMicrophoneDevice();
     void startProcess(bool withAudio, bool announceStarted = true);
@@ -91,6 +93,8 @@ private:
     bool attemptedDesktopDuplicationFallback_ = false;
     bool useNativeCapture_ = false;
     bool attemptedNativeCaptureFallback_ = false;
+    bool useWindowsGraphicsCapture_ = false;
+    bool attemptedWindowsGraphicsCaptureFallback_ = false;
     bool useNativeAudio_ = false;
     bool attemptedNativeAudioFallback_ = false;
     bool microphoneMuted_ = false;
@@ -101,6 +105,7 @@ private:
 #if defined(Q_OS_WIN)
     std::unique_ptr<LastFrame::Platform::WindowsDesktopCapture> nativeCapture_;
     std::unique_ptr<LastFrame::Platform::WindowsAudioCapture> nativeAudio_;
+    std::unique_ptr<LastFrame::Platform::WindowsGraphicsCapture> windowsGraphicsCapture_;
 #endif
 };
 

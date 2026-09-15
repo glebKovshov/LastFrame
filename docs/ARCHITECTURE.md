@@ -11,6 +11,7 @@ GlobalHotkeyManager / MainWindow / SystemTray
        |       |       +--> bounded export queue
        |       +----------> FFmpeg mux/export + atomic rename
        +------------------> native DXGI capture -> raw BGRA pipe
+                              Windows Graphics Capture fallback -> raw BGRA pipe
                               native WASAPI -> AudioMixer -> f32le audio pipe
                               portable FFmpeg fallback
                               |
@@ -44,8 +45,8 @@ mixed samples before a native audio backend hands them to the media layer.
   renames the final file. Existing user clips are never removed by recovery.
 - Audio startup is progressive: native WASAPI mixer, portable FFmpeg system/mic
   inputs, then video-only. Missing sources are filled with silence by the mixer.
-- Capture startup is progressive: native DXGI Desktop Duplication, portable
-  FFmpeg Desktop Duplication, then GDI.
+- Capture startup is progressive: native DXGI Desktop Duplication, Windows
+  Graphics Capture, portable FFmpeg Desktop Duplication, then GDI.
 - Auto/NVENC encoding is progressive: hardware H.264, then software H.264.
 - Monitor changes stop the active session; FPS is not silently changed.
 - Logs contain lifecycle/error text and capability metadata only; no pixels,
@@ -57,7 +58,7 @@ mixed samples before a native audio backend hands them to the media layer.
 production slice can replace its process adapter with an `ICaptureBackend`,
 `IAudioBackend`, and `IMediaEncoder` implementation without changing the
 settings schema, hotkey manager, tray actions, or core tests. The reusable
-AudioMixer, native DXGI capture, and native WASAPI runtime capture are now in
-the Windows path; Windows WGC, audio device-loss recovery with auto-resume,
-Linux PipeWire/portal and macOS ScreenCaptureKit remain outside the validated
-Windows MVP.
+AudioMixer, native DXGI/WGC capture, and native WASAPI runtime capture are now
+in the Windows path; audio device-loss recovery with auto-resume, HDR/DRM
+capability reporting, Linux PipeWire/portal and macOS ScreenCaptureKit remain
+outside the validated Windows MVP.
