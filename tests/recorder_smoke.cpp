@@ -1,5 +1,6 @@
 #include "core/Settings.h"
 #include "media/PortableSegmentRecorder.h"
+#include "platform/MonitorEnumerator.h"
 
 #include <QGuiApplication>
 #include <QCoreApplication>
@@ -12,6 +13,22 @@
 
 int main(int argc, char* argv[]) {
     QGuiApplication application(argc, argv);
+    const auto monitors = LastFrame::Platform::MonitorEnumerator::enumerate();
+    if (monitors.isEmpty()) {
+        std::cerr << "Monitor smoke test found no display\n";
+        return 1;
+    }
+    const auto& firstMonitor = monitors.front();
+    const QString legacyMonitorId = QStringLiteral("%1:%2,%3,%4x%5")
+                                        .arg(firstMonitor.name)
+                                        .arg(firstMonitor.geometry.x())
+                                        .arg(firstMonitor.geometry.y())
+                                        .arg(firstMonitor.geometry.width())
+                                        .arg(firstMonitor.geometry.height());
+    if (LastFrame::Platform::MonitorEnumerator::indexForId(monitors, legacyMonitorId) != 0) {
+        std::cerr << "Legacy monitor id was not recognized\n";
+        return 1;
+    }
     LastFrame::Core::Settings settings = LastFrame::Core::Settings::defaults();
     const auto root = std::filesystem::temp_directory_path() /
                       ("lastframe-recorder-smoke-" + std::to_string(QCoreApplication::applicationPid()));

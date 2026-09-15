@@ -117,7 +117,21 @@ QVector<MonitorInfo> MonitorEnumerator::enumerate() {
 
 int MonitorEnumerator::indexForId(const QVector<MonitorInfo>& monitors, const QString& id) {
     for (int index = 0; index < monitors.size(); ++index) {
-        if (monitors.at(index).id == id) {
+        const MonitorInfo& monitor = monitors.at(index);
+        if (monitor.id == id) {
+            return index;
+        }
+        // Settings created by the first MVP used the monitor name and
+        // geometry as the identifier (for example,
+        // "Mi Monitor:0,0,2560x1440"). Keep that format readable so the UI
+        // can migrate it to the stable display:* identifier on startup.
+        const QString legacyId = QStringLiteral("%1:%2,%3,%4x%5")
+                                     .arg(monitor.name)
+                                     .arg(monitor.geometry.x())
+                                     .arg(monitor.geometry.y())
+                                     .arg(monitor.geometry.width())
+                                     .arg(monitor.geometry.height());
+        if (legacyId == id) {
             return index;
         }
     }

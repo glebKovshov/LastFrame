@@ -485,10 +485,7 @@ MainWindow::MainWindow(QWidget* parent)
         const QString selectedId = QString::fromStdString(settings_.capture.monitorId);
         const bool monitorAvailable = selectedId.compare(QStringLiteral("auto"), Qt::CaseInsensitive) == 0
                                       ? !monitors_.isEmpty()
-                                      : std::any_of(monitors_.cbegin(), monitors_.cend(),
-                                                    [&selectedId](const Platform::MonitorInfo& monitor) {
-                                                        return monitor.id == selectedId;
-                                                    });
+                                      : Platform::MonitorEnumerator::indexForId(monitors_, selectedId) >= 0;
         if (!monitorAvailable) {
             return;
         }
@@ -1226,9 +1223,7 @@ void MainWindow::startOrStop() {
         }
         const QString selectedMonitorId = QString::fromStdString(settings_.capture.monitorId);
         if (!selectedMonitorId.isEmpty() && selectedMonitorId.compare(QStringLiteral("auto"), Qt::CaseInsensitive) != 0 &&
-            !std::any_of(monitors_.cbegin(), monitors_.cend(), [&selectedMonitorId](const Platform::MonitorInfo& monitor) {
-                return monitor.id == selectedMonitorId;
-            })) {
+            Platform::MonitorEnumerator::indexForId(monitors_, selectedMonitorId) < 0) {
             showToast(QStringLiteral("Выбранный монитор недоступен. Выберите доступный монитор заново."), true);
             return;
         }
@@ -1364,10 +1359,7 @@ void MainWindow::refreshMonitors() {
         const QString selectedId = QString::fromStdString(settings_.capture.monitorId);
         const bool monitorAvailable = selectedId.compare(QStringLiteral("auto"), Qt::CaseInsensitive) == 0
                                       ? !detected.isEmpty()
-                                      : std::any_of(detected.cbegin(), detected.cend(),
-                                                    [&selectedId](const Platform::MonitorInfo& monitor) {
-                                                        return monitor.id == selectedId;
-                                                    });
+                                      : Platform::MonitorEnumerator::indexForId(detected, selectedId) >= 0;
         if (monitorAvailable) {
             autoResumeSignature_ = signature;
             autoResumeTimer_.start();
@@ -1731,6 +1723,16 @@ void MainWindow::populateMonitorCombo() {
         monitorCombo_->setCurrentIndex(selected);
     } else if (!monitors_.isEmpty()) {
         monitorCombo_->setCurrentIndex(0);
+    }
+    const QString storedId = QString::fromStdString(settings_.capture.monitorId);
+    const bool automatic = storedId.isEmpty() || storedId.compare(QStringLiteral("auto"), Qt::CaseInsensitive) == 0;
+    if (!automatic && !monitors_.isEmpty()) {
+        const int effectiveIndex = selected >= 0 ? selected : 0;
+        const QString canonicalId = monitors_.at(effectiveIndex).id;
+        if (storedId != canonicalId) {
+            settings_.capture.monitorId = canonicalId.toStdString();
+            saveSettings();
+        }
     }
     updateCapabilityWarning();
 }
