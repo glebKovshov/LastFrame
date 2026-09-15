@@ -66,6 +66,8 @@ Desktop Duplication уже включён через изолированный 
 ## Документация
 
 - [План реализации](docs/IMPLEMENTATION_STATUS_RU.md)
+- [Архитектура](docs/ARCHITECTURE.md)
+- [Техническое задание](docs/TECHNICAL_SPECIFICATION_RU.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
