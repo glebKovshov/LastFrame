@@ -50,6 +50,7 @@ QString Diagnostics::snapshot(const QString& ffmpegPath, const int monitorCount,
            << "recording=" << (recording ? "true" : "false") << "\n"
            << "paused=" << (paused ? "true" : "false") << "\n"
            << "ffmpegAvailable=" << (!ffmpegPath.isEmpty() ? "true" : "false") << "\n"
+           << "ffmpegPath=" << QDir::toNativeSeparators(ffmpegPath) << "\n"
            << "ffmpegName=" << (ffmpegPath.isEmpty() ? "" : QFileInfo(ffmpegPath).fileName()) << "\n"
            << "logPath=" << logPath() << "\n";
     return result;

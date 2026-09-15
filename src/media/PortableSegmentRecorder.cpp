@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTemporaryFile>
@@ -208,6 +209,10 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
         useWindowsGraphicsCapture_ = prepareWindowsGraphicsCapture();
     }
     useNativeAudio_ = prepareNativeAudio();
+    if (!useNativeAudio_ && captureSystemAudio_ && !ffmpegSupportsInputFormat(QStringLiteral("wasapi"))) {
+        captureSystemAudio_ = false;
+        emit message(QStringLiteral("[audio_device_lost] Текущий FFmpeg собран без WASAPI; системный звук отключён, продолжаю с микрофоном или видео."));
+    }
 #endif
     useSoftwareEncoder_ = false;
     attemptedEncoderFallback_ = false;
@@ -639,9 +644,30 @@ void PortableSegmentRecorder::processError(const QProcess::ProcessError errorCod
 QString PortableSegmentRecorder::locateFfmpeg() const {
     const QString adjacent = QCoreApplication::applicationDirPath() + "/ffmpeg.exe";
     if (QFileInfo::exists(adjacent)) {
-        return adjacent;
+        return QFileInfo(adjacent).absoluteFilePath();
     }
-    return QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+    const QString found = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+    if (!found.isEmpty() && QFileInfo::exists(found)) {
+        return QFileInfo(found).absoluteFilePath();
+    }
+    return {};
+}
+
+bool PortableSegmentRecorder::ffmpegSupportsInputFormat(const QString& format) const {
+    if (ffmpegPath_.isEmpty()) {
+        return false;
+    }
+    QProcess probe;
+    probe.setProcessChannelMode(QProcess::MergedChannels);
+    probe.start(ffmpegPath_, {QStringLiteral("-hide_banner"), QStringLiteral("-formats")});
+    if (!probe.waitForFinished(3000)) {
+        probe.kill();
+        probe.waitForFinished(1000);
+        return false;
+    }
+    const QRegularExpression formatLine(
+        QStringLiteral("(?m)^\\s*D\\s+(?:d\\s+)?%1(?:\\s|$)").arg(QRegularExpression::escape(format)));
+    return formatLine.match(QString::fromLocal8Bit(probe.readAll())).hasMatch();
 }
 
 QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Validate the resolved FFmpeg executable before capture and skip the
+  unsupported WASAPI loopback fallback when the selected FFmpeg has no
+  `wasapi` input format; diagnostics now include the full FFmpeg path.
 - Added hybrid RAM retention for completed segments with a 70% soft limit,
   disk spillover and export-time materialization without stopping capture.
 - RAM-segment materialization now runs on a bounded QtConcurrent worker path,
