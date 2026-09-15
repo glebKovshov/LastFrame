@@ -18,9 +18,11 @@ int main(int argc, char* argv[]) {
     settings.buffer.durationSeconds = 5;
     settings.buffer.temporaryDirectory = root / "segments";
     settings.storage.clipsDirectory = root / "clips";
-    // Exercise the default audio path as well. On FFmpeg builds without a
-    // WASAPI demuxer the recorder must fall back to video-only capture.
+    // Exercise the audio fallback path as well. On FFmpeg builds without a
+    // WASAPI demuxer the recorder should continue with the microphone when
+    // available, then fall back to video-only capture.
     settings.audio.systemEnabled = true;
+    settings.audio.microphoneEnabled = qEnvironmentVariable("LASTFRAME_SMOKE_MICROPHONE", "1") != "0";
     // Exercise the region path on the real desktop instead of only testing
     // the full-monitor default.
     settings.capture.source = "custom_region";
@@ -58,6 +60,10 @@ int main(int argc, char* argv[]) {
                      &application, [](const QString& text) {
                         std::cerr << text.toStdString() << '\n';
                     });
+    QObject::connect(&recorder, &LastFrame::Media::PortableSegmentRecorder::message,
+                     &application, [](const QString& text) {
+                         std::cerr << "message: " << text.toStdString() << '\n';
+                     });
 
     recorder.start(settings);
     QTimer::singleShot(15000, &application, &QCoreApplication::quit);

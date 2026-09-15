@@ -67,6 +67,8 @@ if(LASTFRAME_BUILD_UI)
         qt_add_executable(LastFrame
             src/app/main.cpp
             src/platform/GlobalHotkeyManager.cpp
+            src/platform/AudioDeviceEnumerator.cpp
+            src/platform/AudioDeviceEnumerator.h
             src/platform/MonitorEnumerator.cpp
             src/platform/Diagnostics.cpp
             src/platform/Diagnostics.h
@@ -102,6 +104,7 @@ if(LASTFRAME_BUILD_UI)
         if(LASTFRAME_BUILD_SMOKE)
             add_executable(lastframe_recorder_smoke
                 tests/recorder_smoke.cpp
+                src/platform/AudioDeviceEnumerator.cpp
                 src/platform/MonitorEnumerator.cpp
                 src/media/PortableSegmentRecorder.cpp
             )

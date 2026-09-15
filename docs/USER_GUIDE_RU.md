@@ -27,8 +27,8 @@
 
 На странице Hotkeys комбинации можно изменить. Пустое поле отключает действие; дубликаты и занятые Windows-комбинации отклоняются.
 
-## Ограничения MVP
+## Аудио и ограничения MVP
 
-Windows portable backend использует Desktop Duplication через FFmpeg `ddagrab`, а при недоступности API — GDI fallback. Системный звук подключается только если используемая сборка FFmpeg содержит WASAPI; в противном случае приложение сохраняет видео без звука и показывает предупреждение. Микрофонный mixer, Linux/macOS native capture и прямые FFmpeg libraries входят в последующие срезы.
+На странице Audio можно выбрать найденный микрофон и отдельно настроить громкость system/mic. Windows portable backend использует Desktop Duplication через FFmpeg `ddagrab`, а при недоступности API — GDI fallback. Системный звук подключается только если используемая сборка FFmpeg содержит WASAPI; иначе LastFrame продолжит с микрофоном, если он доступен, либо с видео. Полный master-clock mixer, Linux/macOS native capture и прямые FFmpeg libraries входят в последующие срезы.
 
 Проверка обновлений запускается только вручную на странице Advanced и обращается к GitHub Releases. Телеметрия отсутствует.

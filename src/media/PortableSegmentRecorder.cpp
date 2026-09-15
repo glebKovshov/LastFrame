@@ -1,6 +1,7 @@
 #include "media/PortableSegmentRecorder.h"
 
 #include "core/FilenameAllocator.h"
+#include "platform/AudioDeviceEnumerator.h"
 #include "platform/MonitorEnumerator.h"
 
 #include <QCoreApplication>
@@ -62,6 +63,8 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
         QFile::remove(file.absoluteFilePath());
     }
     attemptedVideoOnlyFallback_ = false;
+    captureSystemAudio_ = settings_.audio.systemEnabled;
+    discoverMicrophoneDevice();
     useDesktopDuplication_ = true;
     attemptedDesktopDuplicationFallback_ = false;
     paused_ = false;
@@ -92,7 +95,9 @@ void PortableSegmentRecorder::resume() {
     }
     paused_ = false;
     attemptedVideoOnlyFallback_ = false;
-    startProcess(processHasAudio_);
+    captureSystemAudio_ = settings_.audio.systemEnabled;
+    discoverMicrophoneDevice();
+    startProcess(true);
     emit pausedChanged(false);
 }
 
@@ -245,9 +250,18 @@ void PortableSegmentRecorder::reapSegments() {
 
 void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess::ExitStatus status) {
     Q_UNUSED(status)
+    const QString processOutput = captureProcess_ == nullptr ? QString() : QString::fromLocal8Bit(captureProcess_->readAll());
     if (recording_ && exitCode != 0 && processHasAudio_ && !attemptedVideoOnlyFallback_) {
+        if (captureSystemAudio_) {
+            captureSystemAudio_ = false;
+            emit message(QStringLiteral("Системный звук недоступен; продолжаю с доступным микрофоном или видео. %1")
+                             .arg(processOutput.left(240).simplified()));
+            startProcess(true, false);
+            return;
+        }
         attemptedVideoOnlyFallback_ = true;
-        emit message(QStringLiteral("Системный звук недоступен; повторяю захват только с видео."));
+        emit message(QStringLiteral("Аудио недоступно; повторяю захват только с видео. %1")
+                         .arg(processOutput.left(240).simplified()));
         startProcess(false, false);
         return;
     }
@@ -259,8 +273,7 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
         return;
     }
     if (recording_ && exitCode != 0) {
-        const QString details = captureProcess_ == nullptr ? QString() : QString::fromLocal8Bit(captureProcess_->readAll());
-        emit error(QStringLiteral("Захват завершился с ошибкой: %1").arg(details.left(300)));
+        emit error(QStringLiteral("Захват завершился с ошибкой: %1").arg(processOutput.left(300)));
     }
     recording_ = false;
     segmentTimer_.stop();
@@ -331,17 +344,29 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
              << QStringLiteral("%1x%2").arg(captureRect.width()).arg(captureRect.height()) << QStringLiteral("-i")
              << QStringLiteral("desktop");
     }
-    if (withAudio && settings_.audio.systemEnabled) {
+    const bool includeSystemAudio = withAudio && settings_.audio.systemEnabled && captureSystemAudio_;
+    const bool includeMicrophone = withAudio && settings_.audio.microphoneEnabled && !microphoneDeviceName_.isEmpty();
+    int systemInputIndex = -1;
+    int microphoneInputIndex = -1;
+    int nextInputIndex = 1;
+    if (includeSystemAudio) {
+        systemInputIndex = nextInputIndex++;
         args << QStringLiteral("-thread_queue_size") << QStringLiteral("512")
              << QStringLiteral("-f") << QStringLiteral("wasapi")
              << QStringLiteral("-loopback") << QStringLiteral("1")
-             << QStringLiteral("-i") << QStringLiteral("default");
+             << QStringLiteral("-i")
+             << (settings_.audio.systemDeviceId == "auto"
+                     ? QStringLiteral("default")
+                     : QString::fromStdString(settings_.audio.systemDeviceId));
+    }
+    if (includeMicrophone) {
+        microphoneInputIndex = nextInputIndex++;
+        args << QStringLiteral("-thread_queue_size") << QStringLiteral("512")
+             << QStringLiteral("-f") << QStringLiteral("dshow") << QStringLiteral("-i")
+             << QStringLiteral("audio=%1").arg(microphoneDeviceName_);
     }
 
     args << QStringLiteral("-map") << QStringLiteral("0:v:0");
-    if (withAudio && settings_.audio.systemEnabled) {
-        args << QStringLiteral("-map") << QStringLiteral("1:a:0");
-    }
     const QString container = QString::fromStdString(settings_.video.container).toLower();
     QString codec = QString::fromStdString(settings_.video.codec).toLower();
     if (codec == QStringLiteral("auto")) {
@@ -381,11 +406,30 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
     }
     args << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p")
          << QStringLiteral("-force_key_frames") << QStringLiteral("expr:gte(t,n_forced*1)");
-    if (withAudio && settings_.audio.systemEnabled) {
-        args << QStringLiteral("-c:a")
+    if (includeSystemAudio && includeMicrophone) {
+        const QString systemVolume = QString::number(settings_.audio.systemVolume, 'f', 3);
+        const QString microphoneVolume = QString::number(settings_.audio.microphoneVolume, 'f', 3);
+        args << QStringLiteral("-filter_complex")
+             << QStringLiteral("[%1:a:0]volume=%2[system];[%3:a:0]volume=%4[microphone];[system][microphone]amix=inputs=2:duration=longest:dropout_transition=0[aout]")
+                    .arg(systemInputIndex)
+                    .arg(systemVolume)
+                    .arg(microphoneInputIndex)
+                    .arg(microphoneVolume)
+             << QStringLiteral("-map") << QStringLiteral("[aout]")
+             << QStringLiteral("-c:a")
              << (container == QStringLiteral("webm") ? QStringLiteral("libopus") : QStringLiteral("aac"))
-             << QStringLiteral("-ar") << QString::number(settings_.audio.sampleRate)
-             << QStringLiteral("-ac") << QStringLiteral("2");
+             << QStringLiteral("-ar") << QString::number(settings_.audio.sampleRate) << QStringLiteral("-ac")
+             << QStringLiteral("2");
+    } else if (includeSystemAudio || includeMicrophone) {
+        const int inputIndex = includeSystemAudio ? systemInputIndex : microphoneInputIndex;
+        const QString volume = QString::number(includeSystemAudio ? settings_.audio.systemVolume
+                                                                   : settings_.audio.microphoneVolume,
+                                                'f', 3);
+        args << QStringLiteral("-filter_complex") << QStringLiteral("[%1:a:0]volume=%2[aout]").arg(inputIndex).arg(volume)
+             << QStringLiteral("-map") << QStringLiteral("[aout]") << QStringLiteral("-c:a")
+             << (container == QStringLiteral("webm") ? QStringLiteral("libopus") : QStringLiteral("aac"))
+             << QStringLiteral("-ar") << QString::number(settings_.audio.sampleRate) << QStringLiteral("-ac")
+             << QStringLiteral("2");
     } else {
         args << QStringLiteral("-an");
     }
@@ -437,6 +481,26 @@ QString PortableSegmentRecorder::selectedMonitorLabel() const {
     const int index = Platform::MonitorEnumerator::indexForId(
         monitors, QString::fromStdString(settings_.capture.monitorId));
     return monitors.value(std::max(0, index)).name;
+}
+
+void PortableSegmentRecorder::discoverMicrophoneDevice() {
+    microphoneDeviceName_.clear();
+    if (!settings_.audio.microphoneEnabled) {
+        return;
+    }
+#if defined(Q_OS_WIN)
+    const QString requested = QString::fromStdString(settings_.audio.microphoneDeviceId).trimmed();
+    if (!requested.isEmpty() && requested.compare(QStringLiteral("auto"), Qt::CaseInsensitive) != 0) {
+        microphoneDeviceName_ = requested;
+        return;
+    }
+    const auto devices = Platform::AudioDeviceEnumerator::microphones(ffmpegPath_);
+    if (!devices.isEmpty()) {
+        microphoneDeviceName_ = devices.first().id;
+    }
+#else
+    Q_UNUSED(ffmpegPath_)
+#endif
 }
 
 void PortableSegmentRecorder::startProcess(const bool withAudio, const bool announceStarted) {

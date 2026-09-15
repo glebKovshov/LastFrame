@@ -1,5 +1,6 @@
 #include "ui/MainWindow.h"
 #include "ui/RegionSelector.h"
+#include "platform/AudioDeviceEnumerator.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -367,17 +368,55 @@ QWidget* MainWindow::buildAudioPage() {
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(42, 36, 42, 36);
     layout->addWidget(heading(QStringLiteral("Audio"), page));
-    layout->addWidget(description(QStringLiteral("MVP пытается подключить системный звук через WASAPI loopback. Микрофон и mixer controls сохраняются в конфигурации для следующего audio-среза."), page));
+    layout->addWidget(description(QStringLiteral("Системный звук подключается через WASAPI loopback, микрофон — через доступный локальный audio backend. Источники не покидают компьютер."), page));
+    auto* form = new QFormLayout;
     systemAudioCheck_ = new QCheckBox(QStringLiteral("Системный звук"), page);
     systemAudioCheck_->setChecked(settings_.audio.systemEnabled);
     microphoneCheck_ = new QCheckBox(QStringLiteral("Микрофон"), page);
     microphoneCheck_->setChecked(settings_.audio.microphoneEnabled);
-    microphoneCheck_->setEnabled(false);
-    layout->addWidget(systemAudioCheck_);
-    layout->addWidget(microphoneCheck_);
-    layout->addWidget(description(QStringLiteral("Sample rate: 48 kHz, stereo, AAC для MP4. При недоступном loopback будет выполнен video-only fallback с уведомлением."), page));
+    form->addRow(QStringLiteral("Системный звук"), systemAudioCheck_);
+    form->addRow(QStringLiteral("Микрофон"), microphoneCheck_);
+    const QString adjacentFfmpeg = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ffmpeg.exe"));
+    const QString ffmpegPath = QFileInfo::exists(adjacentFfmpeg) ? adjacentFfmpeg
+                                                                  : QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+    auto* systemDeviceCombo = new QComboBox(page);
+    systemDeviceCombo->addItem(QStringLiteral("Auto"), QStringLiteral("auto"));
+    for (const auto& device : Platform::AudioDeviceEnumerator::systemOutputs(ffmpegPath)) {
+        systemDeviceCombo->addItem(device.name, device.id);
+    }
+    const int systemDeviceIndex = systemDeviceCombo->findData(QString::fromStdString(settings_.audio.systemDeviceId));
+    systemDeviceCombo->setCurrentIndex(systemDeviceIndex >= 0 ? systemDeviceIndex : 0);
+    form->addRow(QStringLiteral("Устройство system"), systemDeviceCombo);
+    auto* microphoneDeviceCombo = new QComboBox(page);
+    microphoneDeviceCombo->addItem(QStringLiteral("Auto"), QStringLiteral("auto"));
+    const auto microphones = Platform::AudioDeviceEnumerator::microphones(ffmpegPath);
+    for (const auto& device : microphones) {
+        microphoneDeviceCombo->addItem(device.name, device.id);
+    }
+    const int microphoneDeviceIndex = microphoneDeviceCombo->findData(QString::fromStdString(settings_.audio.microphoneDeviceId));
+    microphoneDeviceCombo->setCurrentIndex(microphoneDeviceIndex >= 0 ? microphoneDeviceIndex : 0);
+    microphoneDeviceCombo->setEnabled(!microphones.isEmpty());
+    microphoneCheck_->setEnabled(!microphones.isEmpty());
+    form->addRow(QStringLiteral("Устройство microphone"), microphoneDeviceCombo);
+    auto* systemVolume = new QSlider(Qt::Horizontal, page);
+    systemVolume->setRange(0, 200);
+    systemVolume->setValue(qBound(0, qRound(settings_.audio.systemVolume * 100.0), 200));
+    form->addRow(QStringLiteral("Громкость system"), systemVolume);
+    auto* microphoneVolume = new QSlider(Qt::Horizontal, page);
+    microphoneVolume->setRange(0, 200);
+    microphoneVolume->setValue(qBound(0, qRound(settings_.audio.microphoneVolume * 100.0), 200));
+    form->addRow(QStringLiteral("Громкость microphone"), microphoneVolume);
+    layout->addLayout(form);
+    layout->addWidget(description(QStringLiteral("48 kHz, stereo; AAC для MP4 и Opus для WebM. Если WASAPI недоступен, LastFrame продолжит с микрофоном или видео и запишет причину в диагностику."), page));
     layout->addStretch();
     connect(systemAudioCheck_, &QCheckBox::toggled, this, [this](bool value) { settings_.audio.systemEnabled = value; });
+    connect(microphoneCheck_, &QCheckBox::toggled, this, [this](bool value) { settings_.audio.microphoneEnabled = value; });
+    connect(systemDeviceCombo, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this, systemDeviceCombo](int index) { settings_.audio.systemDeviceId = systemDeviceCombo->itemData(index).toString().toStdString(); });
+    connect(microphoneDeviceCombo, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this, microphoneDeviceCombo](int index) { settings_.audio.microphoneDeviceId = microphoneDeviceCombo->itemData(index).toString().toStdString(); });
+    connect(systemVolume, &QSlider::valueChanged, this, [this](int value) { settings_.audio.systemVolume = value / 100.0; });
+    connect(microphoneVolume, &QSlider::valueChanged, this, [this](int value) { settings_.audio.microphoneVolume = value / 100.0; });
     return page;
 }
 

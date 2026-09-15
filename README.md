@@ -35,6 +35,7 @@ ctest --preset core-only
 - один выбранный монитор;
 - full-monitor и прямоугольный region capture через полноэкранный overlay;
 - Desktop Duplication через FFmpeg `ddagrab` с автоматическим GDI fallback;
+- системный звук через WASAPI при наличии demuxer’а и микрофон через DirectShow с выбором устройства, громкостью и безопасным fallback;
 - независимые output width/height и постоянный FPS в пределах частоты монитора;
 - буфер последних 5–300 секунд, по умолчанию 30;
 - сохранение MP4/MKV/WebM через короткие MKV-сегменты и атомарное переименование результата;
@@ -49,7 +50,7 @@ ctest --preset core-only
 на Apple Silicon (включая M1). В текущем срезе полностью проверен Windows
 portable-путь; native macOS/Linux backends ещё не подключены.
 
-Desktop Duplication уже включён через изолированный FFmpeg media backend `ddagrab`; при ошибке API автоматически используется `gdigrab`. Прямой C++ DXGI/WGC backend, полноценный WASAPI loopback + microphone mixer и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
+Desktop Duplication уже включён через изолированный FFmpeg media backend `ddagrab`; при ошибке API автоматически используется `gdigrab`. Микрофонный DirectShow path и управление громкостью уже работают, а полноценный WASAPI loopback + master-clock AudioMixer, прямой C++ DXGI/WGC backend и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
 
 ## Публикация
 

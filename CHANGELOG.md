@@ -8,6 +8,7 @@
 - Added smoke coverage for region capture, audio fallback, concurrent saves and MP4/MKV/WebM.
 - Added Desktop Duplication capture through FFmpeg `ddagrab` with automatic GDI fallback.
 - Added manual GitHub Releases update check, editable global hotkeys and monitor-change watcher.
+- Added microphone device discovery through DirectShow, system/microphone volume controls and audio fallback chain.
 
 ## 0.1.0 — Windows MVP
 

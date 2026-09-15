@@ -61,6 +61,7 @@ private:
     [[nodiscard]] int nextSegmentNumber() const;
     [[nodiscard]] QString escapeConcatPath(const QString& path) const;
     [[nodiscard]] QString selectedMonitorLabel() const;
+    void discoverMicrophoneDevice();
     void startProcess(bool withAudio, bool announceStarted = true);
     void finishExport(ExportJob* job, int exitCode, QProcess::ExitStatus status);
 
@@ -73,6 +74,8 @@ private:
     bool paused_ = false;
     bool attemptedVideoOnlyFallback_ = false;
     bool processHasAudio_ = true;
+    bool captureSystemAudio_ = true;
+    QString microphoneDeviceName_;
     bool useDesktopDuplication_ = true;
     bool attemptedDesktopDuplicationFallback_ = false;
     LastFrame::Core::RateLimiter rateLimiter_{3, std::chrono::seconds(1), std::chrono::seconds(5)};

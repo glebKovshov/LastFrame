@@ -23,6 +23,8 @@
   encoder preset/bitrate и лимит размера файла.
 - Ограниченная очередь export jobs и резервирование имён при параллельных сохранениях.
 - Desktop Duplication через FFmpeg `ddagrab` с `hwdownload`/GPU desktop path и автоматическим GDI fallback.
+- Поиск аудиоустройств через FFmpeg: системный WASAPI output и микрофоны DirectShow,
+  выбор устройства, независимая громкость и fallback system → microphone → video.
 - Ручная проверка GitHub Releases через `api.github.com`, без фоновой телеметрии или автообновления.
 - Редактор глобальных хоткеев с проверкой дубликатов и откатом при конфликте регистрации.
 - Наблюдатель мониторов с интервалом 500 ms: активный буфер безопасно останавливается при изменении дисплея.
@@ -33,7 +35,8 @@
 1. Прямой C++ Windows capture backend: DXGI Desktop Duplication, затем Windows
    Graphics Capture fallback; текущий portable backend уже использует FFmpeg
    `ddagrab` (DXGI Desktop Duplication) и GDI fallback.
-2. WASAPI loopback + microphone capture, master clock и AudioMixer.
+2. Полный WASAPI loopback + microphone capture, master clock и AudioMixer
+   поверх текущего device/fallback слоя.
 3. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
 4. Region selector, DPI-aware coordinates, monitor watcher и overlay.
 5. Интеграционные тесты на RTX 3070 и матрица Windows/Linux/macOS arm64.
