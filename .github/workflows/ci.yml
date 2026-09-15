@@ -47,10 +47,18 @@ jobs:
         shell: pwsh
         run: choco install ffmpeg --no-progress --yes
 
+      - name: Set up Python for Qt installer
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: 6.8.3
+          host: windows
+          target: desktop
           arch: win64_msvc2022_64
           modules: qtnetwork
           cache: true
