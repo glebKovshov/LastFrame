@@ -23,6 +23,7 @@ class QSlider;
 class QStackedWidget;
 class QCloseEvent;
 class QSystemTrayIcon;
+class QAction;
 
 namespace LastFrame::UI {
 
@@ -44,6 +45,7 @@ private slots:
     void pauseOrResume();
     void saveClip();
     void clearBuffer();
+    void toggleMicrophoneMute();
     void chooseRegion();
     void checkForUpdates();
     void copyDiagnostics();
@@ -111,6 +113,7 @@ private:
     QPushButton* updateButton_ = nullptr;
     QPushButton* diagnosticsButton_ = nullptr;
     QSystemTrayIcon* tray_ = nullptr;
+    QAction* trayMuteAction_ = nullptr;
     QTimer monitorTimer_;
     QString monitorSignature_;
     QUrl latestReleaseUrl_;

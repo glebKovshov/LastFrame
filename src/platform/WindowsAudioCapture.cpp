@@ -18,6 +18,7 @@
 #include <wrl/client.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -116,6 +117,7 @@ public:
         mixer_->setVolumes(config.systemVolume, config.microphoneVolume);
         mixer_->setSystemEnabled(config.systemEnabled);
         mixer_->setMicrophoneEnabled(config.microphoneEnabled);
+        microphoneMuted_.store(config.microphoneMuted, std::memory_order_relaxed);
 
         pipePath_ = QStringLiteral("\\\\.\\pipe\\LastFrameAudio_%1")
                         .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
@@ -166,6 +168,11 @@ public:
         closePipe();
         pipePath_.clear();
         mixer_.reset();
+        microphoneMuted_.store(false, std::memory_order_relaxed);
+    }
+
+    void setMicrophoneMuted(const bool muted) {
+        microphoneMuted_.store(muted, std::memory_order_relaxed);
     }
 
     [[nodiscard]] bool isPrepared() const noexcept { return prepared_; }
@@ -425,11 +432,12 @@ private:
 
     bool readSource(Source& source,
                     const bool systemSource,
-                    const Core::Timestamp nowPts) {
+                    const Core::Timestamp nowPts,
+                    QString* error) {
         UINT packetFrames = 0;
         HRESULT result = source.capture->GetNextPacketSize(&packetFrames);
         if (FAILED(result)) {
-            fail(QStringLiteral("WASAPI packet query failed: %1").arg(hresultText(result)));
+            setError(error, QStringLiteral("WASAPI packet query failed: %1").arg(hresultText(result)));
             return false;
         }
         while (packetFrames > 0) {
@@ -438,7 +446,7 @@ private:
             DWORD flags = 0;
             result = source.capture->GetBuffer(&data, &frames, &flags, nullptr, nullptr);
             if (FAILED(result)) {
-                fail(QStringLiteral("WASAPI buffer acquisition failed: %1").arg(hresultText(result)));
+                setError(error, QStringLiteral("WASAPI buffer acquisition failed: %1").arg(hresultText(result)));
                 return false;
             }
             Core::AudioBlock block;
@@ -468,7 +476,7 @@ private:
             }
             result = source.capture->GetNextPacketSize(&packetFrames);
             if (FAILED(result)) {
-                fail(QStringLiteral("WASAPI packet query failed: %1").arg(hresultText(result)));
+                setError(error, QStringLiteral("WASAPI packet query failed: %1").arg(hresultText(result)));
                 return false;
             }
         }
@@ -538,16 +546,25 @@ private:
                 const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now() - startedAt);
                 const Core::Timestamp nowPts = elapsed.count();
-                bool healthy = true;
                 if (systemActive) {
-                    healthy = readSource(systemSource, true, nowPts) && healthy;
+                    QString error;
+                    if (!readSource(systemSource, true, nowPts, &error)) {
+                        systemActive = false;
+                        degrade(QStringLiteral("Системный WASAPI endpoint отключён: %1").arg(error));
+                    }
                 }
                 if (microphoneActive) {
-                    healthy = readSource(microphoneSource, false, nowPts) && healthy;
+                    QString error;
+                    if (!readSource(microphoneSource, false, nowPts, &error)) {
+                        microphoneActive = false;
+                        degrade(QStringLiteral("Микрофонный WASAPI endpoint отключён: %1").arg(error));
+                    }
                 }
-                if (!healthy) {
+                if (!systemActive && !microphoneActive) {
+                    fail(QStringLiteral("All WASAPI audio sources were disconnected"));
                     break;
                 }
+                mixer_->setMicrophoneMuted(microphoneMuted_.load(std::memory_order_relaxed));
                 if (!writeMixed(mixer_->drainUntil(nowPts))) {
                     break;
                 }
@@ -575,6 +592,7 @@ private:
     QString pipePath_;
     std::thread worker_;
     std::unique_ptr<Core::AudioMixer> mixer_;
+    std::atomic<bool> microphoneMuted_{false};
     bool prepared_ = false;
     bool running_ = false;
 };
@@ -594,6 +612,10 @@ bool WindowsAudioCapture::start() {
 
 void WindowsAudioCapture::stop() {
     impl_->stop();
+}
+
+void WindowsAudioCapture::setMicrophoneMuted(const bool muted) {
+    impl_->setMicrophoneMuted(muted);
 }
 
 bool WindowsAudioCapture::isPrepared() const noexcept {

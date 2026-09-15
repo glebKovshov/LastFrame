@@ -15,6 +15,8 @@
 - Connected native Windows WASAPI loopback and microphone capture to the
   AudioMixer, with mixed 48 kHz stereo f32le piped to the encoder and source
   degradation/fallback diagnostics.
+- Added runtime microphone mute/unmute through the global hotkey and tray menu;
+  native capture changes gain without restarting the session.
 - Added manual GitHub Releases update check, editable global hotkeys and monitor-change watcher.
 - Added microphone device discovery through DirectShow, system/microphone volume controls and audio fallback chain.
 - Added automatic NVENC to software H.264 encoder fallback.

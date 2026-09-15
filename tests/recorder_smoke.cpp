@@ -47,6 +47,8 @@ int main(int argc, char* argv[]) {
     std::set<QString> savedPaths;
     QObject::connect(&recorder, &LastFrame::Media::PortableSegmentRecorder::started,
                      &application, [&recorder] {
+                         QTimer::singleShot(1800, &recorder, [&recorder] { recorder.setMicrophoneMuted(true); });
+                         QTimer::singleShot(2600, &recorder, [&recorder] { recorder.setMicrophoneMuted(false); });
                          QTimer::singleShot(4500, &recorder, &LastFrame::Media::PortableSegmentRecorder::saveClip);
                          QTimer::singleShot(4700, &recorder, &LastFrame::Media::PortableSegmentRecorder::saveClip);
                      });

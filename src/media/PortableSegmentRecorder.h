@@ -28,6 +28,7 @@ public:
 
     [[nodiscard]] bool isRecording() const noexcept { return recording_; }
     [[nodiscard]] bool isPaused() const noexcept { return paused_; }
+    [[nodiscard]] bool isMicrophoneMuted() const noexcept { return microphoneMuted_; }
     [[nodiscard]] QString ffmpegPath() const noexcept { return ffmpegPath_; }
     [[nodiscard]] QString temporaryDirectory() const noexcept { return segmentDirectory_; }
 
@@ -38,6 +39,7 @@ public slots:
     void stop();
     void clearBuffer();
     void saveClip();
+    void setMicrophoneMuted(bool muted);
 
 signals:
     void started();
@@ -46,6 +48,7 @@ signals:
     void clipSaved(const QString& path);
     void message(const QString& text);
     void error(const QString& text);
+    void microphoneMuteChanged(bool muted);
 
 private slots:
     void reapSegments();
@@ -90,6 +93,7 @@ private:
     bool attemptedNativeCaptureFallback_ = false;
     bool useNativeAudio_ = false;
     bool attemptedNativeAudioFallback_ = false;
+    bool microphoneMuted_ = false;
     bool useSoftwareEncoder_ = false;
     bool attemptedEncoderFallback_ = false;
     LastFrame::Core::RateLimiter rateLimiter_{3, std::chrono::seconds(1), std::chrono::seconds(5)};

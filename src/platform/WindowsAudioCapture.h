@@ -18,6 +18,7 @@ public:
         QString microphoneDeviceId = QStringLiteral("auto");
         double systemVolume = 1.0;
         double microphoneVolume = 1.0;
+        bool microphoneMuted = false;
         int sampleRate = 48'000;
     };
 
@@ -27,6 +28,7 @@ public:
     [[nodiscard]] bool prepare(const Config& config, QString* error = nullptr);
     [[nodiscard]] bool start();
     void stop();
+    void setMicrophoneMuted(bool muted);
 
     [[nodiscard]] bool isPrepared() const noexcept;
     [[nodiscard]] QString inputPath() const;

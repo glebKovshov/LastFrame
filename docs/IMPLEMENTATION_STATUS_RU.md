@@ -48,9 +48,10 @@
 
 1. Windows Graphics Capture fallback для native backend, а также проверка HDR/DRM
    сценариев и явные capability/error states для недоступных поверхностей.
-2. Device-loss recovery с попытками переподключения и auto-resume, mute/unmute
-   microphone hotkey и tray action; текущий native WASAPI path уже передаёт
-   mixed PCM в encoder и имеет fallback на portable FFmpeg audio.
+2. Device-loss recovery с попытками переподключения и auto-resume; текущий
+   native WASAPI path уже передаёт mixed PCM в encoder, имеет silence-fill,
+   fallback на portable FFmpeg audio и runtime mute/unmute microphone через
+   global hotkey и tray action.
 3. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
 4. Region selector, DPI-aware coordinates, monitor watcher и overlay.
 5. Интеграционные тесты на RTX 3070 и матрица Windows/Linux/macOS arm64.

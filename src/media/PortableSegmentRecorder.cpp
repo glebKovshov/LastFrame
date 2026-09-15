@@ -332,6 +332,32 @@ void PortableSegmentRecorder::saveClip() {
     emit message(QStringLiteral("Экспорт клипа поставлен в очередь."));
 }
 
+void PortableSegmentRecorder::setMicrophoneMuted(const bool muted) {
+    if (microphoneMuted_ == muted) {
+        return;
+    }
+    microphoneMuted_ = muted;
+#if defined(Q_OS_WIN)
+    if (useNativeAudio_ && nativeAudio_ != nullptr) {
+        nativeAudio_->setMicrophoneMuted(muted);
+    } else if (recording_ && processHasAudio_) {
+        QProcess* process = captureProcess_;
+        if (process != nullptr) {
+            process->disconnect(this);
+            process->terminate();
+            if (!process->waitForFinished(1000)) {
+                process->kill();
+                process->waitForFinished(1000);
+            }
+            process->deleteLater();
+            captureProcess_ = nullptr;
+        }
+        startProcess(true, false);
+    }
+#endif
+    emit microphoneMuteChanged(muted);
+}
+
 void PortableSegmentRecorder::reapSegments() {
     const QStringList files = segmentFiles();
     const int keepCount = std::max(3, settings_.buffer.durationSeconds + 2);
@@ -476,7 +502,8 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
     }
     const bool includeNativeAudio = withAudio && useNativeAudio_;
     const bool includeSystemAudio = withAudio && !includeNativeAudio && settings_.audio.systemEnabled && captureSystemAudio_;
-    const bool includeMicrophone = withAudio && !includeNativeAudio && settings_.audio.microphoneEnabled && !microphoneDeviceName_.isEmpty();
+    const bool includeMicrophone = withAudio && !includeNativeAudio && !microphoneMuted_ &&
+                                   settings_.audio.microphoneEnabled && !microphoneDeviceName_.isEmpty();
     int systemInputIndex = -1;
     int microphoneInputIndex = -1;
     int nativeAudioInputIndex = -1;
@@ -684,6 +711,7 @@ bool PortableSegmentRecorder::prepareNativeAudio() {
     config.microphoneDeviceId = QString::fromStdString(settings_.audio.microphoneDeviceId);
     config.systemVolume = settings_.audio.systemVolume;
     config.microphoneVolume = settings_.audio.microphoneVolume;
+    config.microphoneMuted = microphoneMuted_;
     config.sampleRate = settings_.audio.sampleRate;
     QString errorText;
     if (!nativeAudio_->prepare(config, &errorText)) {

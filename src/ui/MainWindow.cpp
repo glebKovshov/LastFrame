@@ -95,6 +95,13 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&recorder_, &Media::PortableSegmentRecorder::pausedChanged, this, [this] {
         applyRecorderState();
     });
+    connect(&recorder_, &Media::PortableSegmentRecorder::microphoneMuteChanged, this, [this](const bool muted) {
+        if (trayMuteAction_ != nullptr) {
+            trayMuteAction_->setText(muted ? QStringLiteral("Включить микрофон")
+                                           : QStringLiteral("Выключить микрофон"));
+        }
+        showToast(muted ? QStringLiteral("Микрофон выключен") : QStringLiteral("Микрофон включён"));
+    });
     connect(&recorder_, &Media::PortableSegmentRecorder::message, this, &MainWindow::showRecorderMessage);
     connect(&recorder_, &Media::PortableSegmentRecorder::error, this, &MainWindow::showRecorderError);
     connect(&recorder_, &Media::PortableSegmentRecorder::clipSaved, this, &MainWindow::onClipSaved);
@@ -637,6 +644,10 @@ void MainWindow::clearBuffer() {
     recorder_.clearBuffer();
 }
 
+void MainWindow::toggleMicrophoneMute() {
+    recorder_.setMicrophoneMuted(!recorder_.isMicrophoneMuted());
+}
+
 void MainWindow::chooseRegion() {
     const int index = monitorCombo_ == nullptr ? -1 : monitorCombo_->currentIndex();
     if (index < 0 || index >= monitors_.size()) {
@@ -727,9 +738,7 @@ void MainWindow::handleHotkey(const Platform::HotkeyAction action) {
     case Platform::HotkeyAction::Clear: clearBuffer(); break;
     case Platform::HotkeyAction::Pause: pauseOrResume(); break;
     case Platform::HotkeyAction::ToggleCapture: startOrStop(); break;
-    case Platform::HotkeyAction::MuteMicrophone:
-        showToast(QStringLiteral("Mute microphone подключится вместе с audio mixer."));
-        break;
+    case Platform::HotkeyAction::MuteMicrophone: toggleMicrophoneMute(); break;
     }
 }
 
@@ -837,12 +846,14 @@ void MainWindow::setupTray() {
     auto* pause = menu->addAction(QStringLiteral("Пауза/продолжение"));
     menu->addSeparator();
     auto* clear = menu->addAction(QStringLiteral("Очистить буфер"));
+    trayMuteAction_ = menu->addAction(QStringLiteral("Выключить микрофон"));
     auto* settings = menu->addAction(QStringLiteral("Настройки"));
     auto* quit = menu->addAction(QStringLiteral("Выход"));
     connect(save, &QAction::triggered, this, &MainWindow::saveClip);
     connect(toggle, &QAction::triggered, this, &MainWindow::startOrStop);
     connect(pause, &QAction::triggered, this, &MainWindow::pauseOrResume);
     connect(clear, &QAction::triggered, this, &MainWindow::clearBuffer);
+    connect(trayMuteAction_, &QAction::triggered, this, &MainWindow::toggleMicrophoneMute);
     connect(settings, &QAction::triggered, this, &MainWindow::showFromSingleInstance);
     connect(quit, &QAction::triggered, this, [this] { forceQuit_ = true; qApp->quit(); });
     tray_->setContextMenu(menu);
