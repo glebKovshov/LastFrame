@@ -78,6 +78,8 @@ private:
     QString microphoneDeviceName_;
     bool useDesktopDuplication_ = true;
     bool attemptedDesktopDuplicationFallback_ = false;
+    bool useSoftwareEncoder_ = false;
+    bool attemptedEncoderFallback_ = false;
     LastFrame::Core::RateLimiter rateLimiter_{3, std::chrono::seconds(1), std::chrono::seconds(5)};
     QList<ExportJob*> exports_;
 };

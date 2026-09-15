@@ -9,6 +9,7 @@
 - Added Desktop Duplication capture through FFmpeg `ddagrab` with automatic GDI fallback.
 - Added manual GitHub Releases update check, editable global hotkeys and monitor-change watcher.
 - Added microphone device discovery through DirectShow, system/microphone volume controls and audio fallback chain.
+- Added automatic NVENC to software H.264 encoder fallback.
 
 ## 0.1.0 — Windows MVP
 

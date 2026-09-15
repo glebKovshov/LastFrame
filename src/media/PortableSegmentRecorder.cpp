@@ -67,6 +67,8 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
     discoverMicrophoneDevice();
     useDesktopDuplication_ = true;
     attemptedDesktopDuplicationFallback_ = false;
+    useSoftwareEncoder_ = false;
+    attemptedEncoderFallback_ = false;
     paused_ = false;
     startProcess(true);
 }
@@ -272,6 +274,15 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
         startProcess(processHasAudio_, false);
         return;
     }
+    if (recording_ && exitCode != 0 && !useSoftwareEncoder_ && !attemptedEncoderFallback_ &&
+        (settings_.video.container != "webm") &&
+        (settings_.video.codec == "auto" || settings_.video.codec == "h264_nvenc")) {
+        attemptedEncoderFallback_ = true;
+        useSoftwareEncoder_ = true;
+        emit message(QStringLiteral("Аппаратный H.264 недоступен; использую software fallback."));
+        startProcess(processHasAudio_, false);
+        return;
+    }
     if (recording_ && exitCode != 0) {
         emit error(QStringLiteral("Захват завершился с ошибкой: %1").arg(processOutput.left(300)));
     }
@@ -371,6 +382,9 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
     QString codec = QString::fromStdString(settings_.video.codec).toLower();
     if (codec == QStringLiteral("auto")) {
         codec = container == QStringLiteral("webm") ? QStringLiteral("libvpx-vp9") : QStringLiteral("h264_nvenc");
+    }
+    if (useSoftwareEncoder_ && container != QStringLiteral("webm")) {
+        codec = QStringLiteral("libx264");
     }
     if (container == QStringLiteral("webm") && codec != QStringLiteral("libvpx-vp9")) {
         codec = QStringLiteral("libvpx-vp9");
@@ -524,6 +538,16 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
             attemptedDesktopDuplicationFallback_ = true;
             useDesktopDuplication_ = false;
             emit message(QStringLiteral("Desktop Duplication недоступен; использую совместимый GDI-захват."));
+            startProcess(withAudio, announceStarted);
+            return;
+        }
+        const bool canFallbackToSoftware = !useSoftwareEncoder_ && !attemptedEncoderFallback_ &&
+                                           settings_.video.container != "webm" &&
+                                           (settings_.video.codec == "auto" || settings_.video.codec == "h264_nvenc");
+        if (canFallbackToSoftware) {
+            attemptedEncoderFallback_ = true;
+            useSoftwareEncoder_ = true;
+            emit message(QStringLiteral("Аппаратный H.264 недоступен; использую software fallback."));
             startProcess(withAudio, announceStarted);
             return;
         }

@@ -25,6 +25,7 @@
 - Desktop Duplication через FFmpeg `ddagrab` с `hwdownload`/GPU desktop path и автоматическим GDI fallback.
 - Поиск аудиоустройств через FFmpeg: системный WASAPI output и микрофоны DirectShow,
   выбор устройства, независимая громкость и fallback system → microphone → video.
+- Encoder fallback: при ошибке Auto/NVENC повторяется запуск с software H.264.
 - Ручная проверка GitHub Releases через `api.github.com`, без фоновой телеметрии или автообновления.
 - Редактор глобальных хоткеев с проверкой дубликатов и откатом при конфликте регистрации.
 - Наблюдатель мониторов с интервалом 500 ms: активный буфер безопасно останавливается при изменении дисплея.

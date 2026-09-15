@@ -37,6 +37,10 @@ int main(int argc, char* argv[]) {
     if (!requestedContainer.isEmpty()) {
         settings.video.container = requestedContainer.toStdString();
     }
+    const QString requestedCodec = qEnvironmentVariable("LASTFRAME_SMOKE_CODEC");
+    if (!requestedCodec.isEmpty()) {
+        settings.video.codec = requestedCodec.toStdString();
+    }
 
     LastFrame::Media::PortableSegmentRecorder recorder;
     bool success = false;
