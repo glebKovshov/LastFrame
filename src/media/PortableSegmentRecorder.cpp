@@ -200,6 +200,7 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
 #endif
     useSoftwareEncoder_ = false;
     attemptedEncoderFallback_ = false;
+    automaticEncoderAttempt_ = 0;
     paused_ = false;
     startProcess(true);
 }
@@ -239,6 +240,7 @@ void PortableSegmentRecorder::resume() {
     }
     paused_ = false;
     attemptedVideoOnlyFallback_ = false;
+    automaticEncoderAttempt_ = 0;
     captureSystemAudio_ = settings_.audio.systemEnabled;
     discoverMicrophoneDevice();
 #if defined(Q_OS_WIN)
@@ -473,6 +475,10 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
         startProcess(processHasAudio_, false);
         return;
     }
+    if (recording_ && exitCode != 0 && tryNextAutomaticEncoder()) {
+        startProcess(processHasAudio_, false);
+        return;
+    }
     if (recording_ && exitCode != 0 && !useSoftwareEncoder_ && !attemptedEncoderFallback_ &&
         (settings_.video.container != "webm") &&
         (settings_.video.codec == "auto" || settings_.video.codec == "h264_nvenc" ||
@@ -622,7 +628,13 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
     const QString container = QString::fromStdString(settings_.video.container).toLower();
     QString codec = QString::fromStdString(settings_.video.codec).toLower();
     if (codec == QStringLiteral("auto")) {
-        codec = container == QStringLiteral("webm") ? QStringLiteral("libvpx-vp9") : QStringLiteral("h264_nvenc");
+        if (container == QStringLiteral("webm")) {
+            codec = QStringLiteral("libvpx-vp9");
+        } else {
+            const QStringList hardwareEncoders{QStringLiteral("h264_nvenc"), QStringLiteral("h264_amf"),
+                                               QStringLiteral("h264_qsv"), QStringLiteral("h264_videotoolbox")};
+            codec = hardwareEncoders.value(automaticEncoderAttempt_, QStringLiteral("h264_nvenc"));
+        }
     }
     if (useSoftwareEncoder_ && container != QStringLiteral("webm")) {
         codec = QStringLiteral("libx264");
@@ -745,6 +757,18 @@ QString PortableSegmentRecorder::selectedMonitorLabel() const {
         return monitors.at(index).name;
     }
     return monitors.isEmpty() ? QStringLiteral("неизвестен") : monitors.first().name;
+}
+
+bool PortableSegmentRecorder::tryNextAutomaticEncoder() {
+    if (useSoftwareEncoder_ || settings_.video.container == "webm" || settings_.video.codec != "auto" ||
+        automaticEncoderAttempt_ >= 3) {
+        return false;
+    }
+    ++automaticEncoderAttempt_;
+    const QStringList names{QStringLiteral("NVENC"), QStringLiteral("AMD AMF"), QStringLiteral("Intel QSV"),
+                            QStringLiteral("Apple VideoToolbox")};
+    emit message(QStringLiteral("Hardware H.264 backend недоступен; пробую %1.").arg(names.value(automaticEncoderAttempt_)));
+    return true;
 }
 
 bool PortableSegmentRecorder::prepareNativeCapture() {
@@ -961,6 +985,10 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
             attemptedDesktopDuplicationFallback_ = true;
             useDesktopDuplication_ = false;
             emit message(QStringLiteral("Desktop Duplication недоступен; использую совместимый GDI-захват."));
+            startProcess(withAudio, announceStarted);
+            return;
+        }
+        if (tryNextAutomaticEncoder()) {
             startProcess(withAudio, announceStarted);
             return;
         }

@@ -75,6 +75,7 @@ private:
     [[nodiscard]] bool prepareWindowsGraphicsCapture();
     [[nodiscard]] bool prepareNativeAudio();
     void discoverMicrophoneDevice();
+    [[nodiscard]] bool tryNextAutomaticEncoder();
     void startProcess(bool withAudio, bool announceStarted = true);
     void finishExport(ExportJob* job, int exitCode, QProcess::ExitStatus status);
 
@@ -100,6 +101,7 @@ private:
     bool microphoneMuted_ = false;
     bool useSoftwareEncoder_ = false;
     bool attemptedEncoderFallback_ = false;
+    int automaticEncoderAttempt_ = 0;
     LastFrame::Core::RateLimiter rateLimiter_{3, std::chrono::seconds(1), std::chrono::seconds(5)};
     QList<ExportJob*> exports_;
 #if defined(Q_OS_WIN)

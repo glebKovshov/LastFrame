@@ -36,6 +36,8 @@
   suspend/lock and use the existing two-second Auto resume path after unlock/resume.
 - Added an actionable error dialog with technical details, local log path, copy
   diagnostics and capture restart actions.
+- Auto encoder selection now walks hardware H.264 backends in capability order
+  before falling back to software encoding.
 - Added a hardware smoke override (`LASTFRAME_FORCE_WGC=1`) used to validate the
   Windows Graphics Capture path end-to-end on the development machine.
 

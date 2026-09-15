@@ -38,6 +38,8 @@
 - Capability probe и UI учитывают H.264 backend'ы NVIDIA NVENC, AMD AMF, Intel
   QSV и Apple VideoToolbox; экспорт показывает оценку размера и ограничивается
   `maxFileSizeMiB` самим FFmpeg до атомарного rename.
+- `Auto` при ошибке последовательно пробует NVENC → AMF → QSV → VideoToolbox,
+  затем software H.264; ручные backend'ы сохраняют отдельный software fallback.
 - Ошибки recorder/hotkey/update имеют стабильные технические коды для диагностики:
   `capture_failed`, `audio_device_lost`, `encoder_unavailable`, `export_failed`,
   `queue_overflow`, `hotkey_conflict`, `monitor_changed`.
