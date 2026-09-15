@@ -63,6 +63,8 @@
 - До запуска буфера Capture/Video показывают предупреждения capability: незавершённая
   проверка, недоступный ручной encoder/VP9, отсутствие WASAPI и FPS выше частоты
   выбранного монитора; fallback остаётся явным и диагностируемым.
+- Добавлен отдельный `lastframe_notification_overlay_smoke`: на Windows он
+  показывает overlay и проверяет `GetWindowDisplayAffinity == WDA_EXCLUDEFROMCAPTURE`.
 - Первый запуск показывает Auto-профиль, ограничивает FPS частотой доступного монитора
   и не запускает capture без явного действия пользователя.
 - Qt-free `AudioMixer` core primitive: общий master clock, silence-fill,
@@ -100,8 +102,8 @@
 
 ## Оставшиеся обязательные срезы по ТЗ
 
-1. Интеграционная проверка на конкретных capture backend'ах, что исключение
-   overlay действительно соблюдается, и тесты DRM/HDR capability states.
+1. Интеграционная проверка исключения overlay на каждом capture backend'е и
+   тесты DRM/HDR capability states; Windows display-affinity smoke уже добавлен.
 2. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
 3. Завершить ручную матрицу DPI для нескольких Windows-мониторов и native
    macOS ScreenCaptureKit/Linux PipeWire/portal backends.

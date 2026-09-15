@@ -161,6 +161,20 @@ if(LASTFRAME_BUILD_UI)
             )
             target_include_directories(lastframe_capability_smoke PRIVATE src)
             target_link_libraries(lastframe_capability_smoke PRIVATE Qt6::Core)
+
+            qt_add_executable(lastframe_notification_overlay_smoke
+                tests/notification_overlay_smoke.cpp
+                src/ui/NotificationOverlay.cpp
+                src/ui/NotificationOverlay.h
+            )
+            target_include_directories(lastframe_notification_overlay_smoke PRIVATE src)
+            target_link_libraries(lastframe_notification_overlay_smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+            if(WIN32)
+                target_compile_definitions(lastframe_notification_overlay_smoke PRIVATE NOMINMAX UNICODE _UNICODE)
+                target_link_libraries(lastframe_notification_overlay_smoke PRIVATE user32)
+                add_test(NAME lastframe_notification_overlay_smoke
+                         COMMAND lastframe_notification_overlay_smoke)
+            endif()
         endif()
     else()
         message(WARNING "Qt 6.8+ was not found; the core and tests will still be configured, but LastFrame UI is skipped.")
