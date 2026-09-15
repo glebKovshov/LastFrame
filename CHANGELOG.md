@@ -11,6 +11,8 @@
 - Added a first-run Auto profile dialog that keeps capture stopped until the user
   explicitly starts the buffer.
 - Added notification language, corner, duration and opacity settings with JSON validation.
+- Added complete RU/EN interface switching with immediate window/tray retranslation
+  and a persistent interface-language setting.
 - Added local clip-directory selection, temporary-segment visibility, log opening and
   tray/Storage actions for opening the clips directory.
 - Added state-colored tray icon: gray idle, green recording, yellow paused/warning,

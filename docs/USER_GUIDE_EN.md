@@ -24,4 +24,6 @@ The Audio page exposes detected microphones and independent system/microphone vo
 
 The Notifications page controls system notifications and the click-through corner overlay, including RU/EN notification language, all four corners, duration, and opacity. The overlay is short-lived and requests `WDA_EXCLUDEFROMCAPTURE` on supported Windows capture APIs.
 
+The full interface language is selected on Advanced → Interface language. Switching to RU or EN rebuilds the window and tray menu immediately and persists the choice in `settings.json`; notification language remains independently configurable.
+
 Storage lets the user choose, open, and clean the local clip directory. Completed segments stay in RAM up to the 70% soft limit and spill over to the local temporary directory when needed.

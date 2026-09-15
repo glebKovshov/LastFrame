@@ -56,6 +56,7 @@ private slots:
     void copyDiagnostics();
     void refreshMonitors();
     void chooseTheme(int index);
+    void chooseLanguage(int index);
     void handleHotkey(LastFrame::Platform::HotkeyAction action);
     void showRecorderError(const QString& text);
     void showRecorderMessage(const QString& text);
@@ -63,6 +64,7 @@ private slots:
 
 private:
     void buildUi();
+    void rebuildUi();
     QWidget* buildOverviewPage();
     QWidget* buildCapturePage();
     QWidget* buildVideoPage();
@@ -118,6 +120,7 @@ private:
     QSpinBox* maxFileSizeSpin_ = nullptr;
     QLabel* estimatedSizeLabel_ = nullptr;
     QComboBox* themeCombo_ = nullptr;
+    QComboBox* languageCombo_ = nullptr;
     QCheckBox* systemAudioCheck_ = nullptr;
     QCheckBox* microphoneCheck_ = nullptr;
     QPushButton* updateButton_ = nullptr;

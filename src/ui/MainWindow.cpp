@@ -4,6 +4,7 @@
 #include "platform/AudioDeviceEnumerator.h"
 
 #include <QApplication>
+#include <QAbstractButton>
 #include <QCheckBox>
 #include <QClipboard>
 #include <QCloseEvent>
@@ -77,27 +78,262 @@ QString locateFfmpegForUi() {
     return QFileInfo::exists(adjacent) ? adjacent : QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
 }
 
-QString localizeNotification(const QString& text, const QString& language) {
-    if (language.compare(QStringLiteral("en"), Qt::CaseInsensitive) != 0) {
-        return text;
+QString localizedUiText(const QString& text, const QString& language) {
+    struct Translation {
+        const char* russian;
+        const char* english;
+    };
+    static const Translation translations[] = {
+        {"Сохраняйте последние секунды игры", "Save the last seconds of your game"},
+        {"Overview", "Overview"},
+        {"Обзор", "Overview"},
+        {"Capture", "Capture"},
+        {"Захват", "Capture"},
+        {"Video", "Video"},
+        {"Видео", "Video"},
+        {"Audio", "Audio"},
+        {"Аудио", "Audio"},
+        {"Hotkeys", "Hotkeys"},
+        {"Горячие клавиши", "Hotkeys"},
+        {"Storage", "Storage"},
+        {"Хранилище", "Storage"},
+        {"Notifications", "Notifications"},
+        {"Уведомления", "Notifications"},
+        {"Advanced", "Advanced"},
+        {"Дополнительно", "Advanced"},
+        {"About", "About"},
+        {"О программе", "About"},
+        {"Локальный кольцевой буфер для быстрого сохранения игровых моментов.", "Local ring buffer for quickly saving game moments."},
+        {"Состояние буфера", "Buffer status"},
+        {"Выключен", "Off"},
+        {"Нажмите «Начать буфер», чтобы начать захват.", "Press “Start buffer” to begin capture."},
+        {"Начать буфер", "Start buffer"},
+        {"Остановить", "Stop"},
+        {"Пауза", "Pause"},
+        {"Продолжить", "Resume"},
+        {"Сохранить клип", "Save clip"},
+        {"Очистить", "Clear"},
+        {"Монитор", "Monitor"},
+        {"Один выбранный монитор, cursor capture включён по умолчанию.", "One selected monitor; cursor capture is enabled by default."},
+        {"Буфер", "Buffer"},
+        {"Последние N секунд; сегменты ограничиваются по времени и очереди.", "Last N seconds; segments are bounded by time and queue limits."},
+        {"Приватность", "Privacy"},
+        {"Кадры, звук и диагностика остаются на этом компьютере.", "Frames, audio, and diagnostics stay on this computer."},
+        {"Активен", "Active"},
+        {"Новые кадры временно не поступают; накопленные сегменты доступны для сохранения.", "New frames are temporarily paused; accumulated segments are available to save."},
+        {"Выберите источник и безопасные параметры захвата.", "Choose the source and safe capture parameters."},
+        {"Весь монитор", "Full monitor"},
+        {"Прямоугольная область", "Custom region"},
+        {"Источник", "Source"},
+        {"Выбрать область", "Choose region"},
+        {"Регион", "Region"},
+        {"Показывать курсор", "Show cursor"},
+        {"Автоматически продолжать после изменения монитора", "Auto resume after monitor changes"},
+        {"Разрешение вывода", "Output resolution"},
+        {"Ширина вывода", "Output width"},
+        {"Высота вывода", "Output height"},
+        {"Регион ограничивается выбранным монитором. HDR-мониторы помечаются как HDR → SDR: защищённый контент не обходится, а HDR-диапазон может быть потерян. Параметры применяются при следующем запуске буфера.", "The region is constrained to the selected monitor. HDR monitors are marked HDR → SDR: protected content is not bypassed, and HDR range may be lost. Parameters apply on the next buffer start."},
+        {"MVP использует MP4 как основной формат и аппаратный H.264 NVENC на NVIDIA.", "The MVP uses MP4 by default and hardware H.264 NVENC on NVIDIA."},
+        {"Контейнер", "Container"},
+        {"Кодек", "Codec"},
+        {"Пресет", "Preset"},
+        {"Custom bitrate", "Custom bitrate"},
+        {"Лимит файла", "File size limit"},
+        {"Оценка размера", "Estimated size"},
+        {"MP4/MKV используют H.264, WebM — VP9. Auto выбирает доступный hardware H.264 через capability probe и сохраняет fallback через software encoder.", "MP4/MKV use H.264, WebM uses VP9. Auto selects available hardware H.264 through the capability probe and falls back to the software encoder."},
+        {"выше лимита, экспорт будет остановлен", "above the limit; export will stop"},
+        {"в пределах лимита", "within the limit"},
+        {"Системный звук подключается через WASAPI loopback, микрофон — через доступный локальный audio backend. Источники не покидают компьютер.", "System audio uses WASAPI loopback and the microphone uses an available local audio backend. Sources never leave the computer."},
+        {"Системный звук", "System audio"},
+        {"Микрофон", "Microphone"},
+        {"Устройство system", "System device"},
+        {"Устройство microphone", "Microphone device"},
+        {"Громкость system", "System volume"},
+        {"Громкость microphone", "Microphone volume"},
+        {"48 kHz, stereo; AAC для MP4 и Opus для WebM. Если WASAPI недоступен, LastFrame продолжит с микрофоном или видео и запишет причину в диагностику.", "48 kHz, stereo; AAC for MP4 and Opus for WebM. If WASAPI is unavailable, LastFrame continues with microphone or video and records the reason in diagnostics."},
+        {"Глобальные комбинации работают поверх игры и проверяются до регистрации.", "Global shortcuts work over games and are validated before registration."},
+        {"Сохранить", "Save"},
+        {"Старт/стоп", "Start/stop"},
+        {"Mute microphone", "Mute microphone"},
+        {"Применить хоткеи", "Apply hotkeys"},
+        {"Формат: Ctrl+Shift+F10. Пустое поле отключает действие; одинаковые комбинации запрещены.", "Format: Ctrl+Shift+F10. An empty field disables an action; duplicate combinations are not allowed."},
+        {"Готовые клипы не удаляются автоматически. Незавершённые временные сегменты находятся в каталоге приложения.", "Completed clips are never deleted automatically. Incomplete temporary segments are kept in the application directory."},
+        {"Выбрать каталог клипов", "Choose clips directory"},
+        {"Открыть каталог клипов", "Open clips directory"},
+        {"Каталог недоступен", "Directory unavailable"},
+        {"Носитель недоступен или ещё не готов.", "The storage is unavailable or not ready yet."},
+        {"Носитель доступен только для чтения.", "The storage is read-only."},
+        {"На носителе должно быть не менее 64 MiB свободного места.", "The storage must have at least 64 MiB free."},
+        {"Выберите каталог на локальном фиксированном диске; сетевые и съёмные носители не поддерживаются.", "Choose a directory on a local fixed disk; network and removable media are not supported."},
+        {"Очистить временные сегменты и буфер", "Clear temporary segments and buffer"},
+        {"Можно выбрать только локальный фиксированный диск. Сетевые и съёмные носители блокируются; временные сегменты остаются в локальном каталоге приложения.", "Only a local fixed disk can be selected. Network and removable media are blocked; temporary segments stay in the local application directory."},
+        {"Настройте локальные уведомления LastFrame. Звуковая обратная связь не используется.", "Configure local LastFrame notifications. Audio feedback is not used."},
+        {"Показывать уведомления", "Show notifications"},
+        {"Системные уведомления", "System notifications"},
+        {"Показывать угловой overlay", "Show corner overlay"},
+        {"Toast overlay", "Toast overlay"},
+        {"Русский", "Russian"},
+        {"English", "English"},
+        {"Язык уведомлений", "Notification language"},
+        {"Сверху справа", "Top right"},
+        {"Сверху слева", "Top left"},
+        {"Снизу справа", "Bottom right"},
+        {"Снизу слева", "Bottom left"},
+        {"Положение overlay", "Overlay position"},
+        {"Длительность", "Duration"},
+        {"Непрозрачность", "Opacity"},
+        {"Системные toast-сообщения выводятся через трей. Overlay не перехватывает мышь и не используется как игровой HUD; на Windows запрашивается исключение из поддерживаемого захвата экрана.", "System toasts are shown through the tray. The overlay is click-through and is not a game HUD; on Windows, capture exclusion is requested when supported."},
+        {"Длина буфера", "Buffer duration"},
+        {"RAM limit", "RAM limit"},
+        {"Тёмная", "Dark"},
+        {"Светлая", "Light"},
+        {"Тема", "Theme"},
+        {"Язык интерфейса", "Interface language"},
+        {"Проверить обновления", "Check for updates"},
+        {"Скопировать диагностику", "Copy diagnostics"},
+        {"Открыть локальный лог", "Open local log"},
+        {"Телеметрия отключена. Проверка обновлений будет ручной через GitHub Releases и по умолчанию отключена.", "Telemetry is disabled. Update checks are manual through GitHub Releases and disabled by default."},
+        {"FFmpeg: проверка capability…", "FFmpeg: checking capabilities…"},
+        {"FFmpeg: поиск capability при старте", "FFmpeg: looking for capabilities at startup"},
+        {"Каталог сегментов: %1", "Segment directory: %1"},
+        {"About LastFrame", "About LastFrame"},
+        {"Open-source локальный instant replay recorder. Никаких аккаунтов, облака или фоновой телеметрии.", "Open-source local instant replay recorder. No accounts, cloud, or background telemetry."},
+        {"Лицензия: GPL-3.0-or-later. Portable release публикуется через GitHub Releases без установщика.", "License: GPL-3.0-or-later. Portable releases are published through GitHub Releases without an installer."},
+        {"Одинаковые хоткеи использовать нельзя.", "Duplicate hotkeys are not allowed."},
+        {"Не удалось зарегистрировать хоткеи; настройки откатились.", "Hotkeys could not be registered; settings were reverted."},
+        {"Хоткеи применены.", "Hotkeys applied."},
+        {"Нельзя начать буфер: монитор не выбран.", "Cannot start buffer: no monitor is selected."},
+        {"Выбранный монитор недоступен. Выберите доступный монитор заново.", "The selected monitor is unavailable. Choose an available monitor again."},
+        {"Выбран custom region, но область не задана или слишком мала.", "Custom region is selected, but the region is missing or too small."},
+        {"Выходное разрешение должно быть чётным для выбранного YUV420 профиля.", "Output dimensions must be even for the selected YUV420 profile."},
+        {"Сначала выберите монитор.", "Select a monitor first."},
+        {"Регион слишком мал.", "The region is too small."},
+        {"Проверка…", "Checking…"},
+        {"LastFrame — ошибка", "LastFrame — error"},
+        {"Проверьте настройки захвата или перезапустите сессию. Старые сохранённые клипы не затрагиваются.", "Check capture settings or restart the session. Existing saved clips are not affected."},
+        {"Технический код и подробности записаны в локальный лог:\n%1", "The technical code and details were written to the local log:\n%1"},
+        {"Перезапустить захват", "Restart capture"},
+        {"Закрыть", "Close"},
+        {"Начать/остановить буфер", "Start/stop buffer"},
+        {"Пауза/продолжение", "Pause/resume"},
+        {"Очистить буфер", "Clear buffer"},
+        {"Открыть папку клипов", "Open clips folder"},
+        {"Настройки", "Settings"},
+        {"Выход", "Quit"},
+        {"FFmpeg не найден. Положите ffmpeg.exe рядом с LastFrame.exe или добавьте его в PATH.", "FFmpeg was not found. Place ffmpeg.exe next to LastFrame.exe or add it to PATH."},
+        {"capture backend не найден", "capture backend not found"},
+        {"доступен", "available"},
+        {"нет", "none"},
+        {"Начальная настройка готова. Профиль Auto использует выбранный монитор, безопасный FPS и аппаратный H.264 с fallback.", "Initial setup is ready. The Auto profile uses the selected monitor, a safe FPS, and hardware H.264 with fallback."},
+        {"Захват не запускается автоматически. Можно оставить Auto или открыть страницы настроек для точной конфигурации.", "Capture does not start automatically. Keep Auto or open Settings for detailed configuration."},
+        {"Включить микрофон", "Unmute microphone"},
+        {"Выключить микрофон", "Mute microphone"},
+        {"Добро пожаловать в LastFrame", "Welcome to LastFrame"},
+        {"Оставить Auto", "Keep Auto"},
+        {"Открыть настройки", "Open settings"},
+        {"Позже", "Later"},
+        {"Буфер запущен", "Buffer started"},
+        {"Буфер остановлен", "Buffer stopped"},
+        {"Микрофон выключен", "Microphone muted"},
+        {"Микрофон включён", "Microphone unmuted"},
+        {"Установлена актуальная версия.", "You are up to date."},
+        {"Опубликованных releases пока нет.", "No releases have been published yet."},
+        {"Диагностика скопирована в буфер обмена.", "Diagnostics copied to clipboard."},
+        {"Буфер очищен; сохранённые клипы не затронуты.", "Buffer cleared; saved clips were not touched."},
+        {"Клип сохранён", "Clip saved"},
+        {"LastFrame свёрнут в трей.", "LastFrame was minimized to the tray."},
+    };
+    const bool english = language.compare(QStringLiteral("en"), Qt::CaseInsensitive) == 0;
+    for (const auto& translation : translations) {
+        const QString russian = QString::fromUtf8(translation.russian);
+        const QString translated = QString::fromUtf8(translation.english);
+        if (russian == translated) {
+            continue;
+        }
+        if (text == russian) {
+            return english ? translated : russian;
+        }
+        if (text == translated) {
+            return english ? translated : russian;
+        }
     }
-    if (text == QStringLiteral("Буфер запущен")) return QStringLiteral("Buffer started");
-    if (text == QStringLiteral("Буфер остановлен")) return QStringLiteral("Buffer stopped");
-    if (text == QStringLiteral("Микрофон выключен")) return QStringLiteral("Microphone muted");
-    if (text == QStringLiteral("Микрофон включён")) return QStringLiteral("Microphone unmuted");
-    if (text == QStringLiteral("Установлена актуальная версия.")) return QStringLiteral("You are up to date.");
-    if (text == QStringLiteral("Опубликованных releases пока нет.")) return QStringLiteral("No releases have been published yet.");
-    if (text == QStringLiteral("Диагностика скопирована в буфер обмена.")) return QStringLiteral("Diagnostics copied to clipboard.");
-    if (text == QStringLiteral("Буфер очищен; сохранённые клипы не затронуты.")) return QStringLiteral("Buffer cleared; saved clips were not touched.");
-    if (text == QStringLiteral("Клип сохранён")) return QStringLiteral("Clip saved");
-    if (text == QStringLiteral("LastFrame свёрнут в трей.")) return QStringLiteral("LastFrame was minimized to the tray.");
-    if (text.startsWith(QStringLiteral("Клип сохранён: "))) {
-        return QStringLiteral("Clip saved: ") + text.mid(QStringLiteral("Клип сохранён: ").size());
+    if (english) {
+        if (text.startsWith(QStringLiteral("Клипы: "))) return QStringLiteral("Clips: ") + text.mid(7);
+        if (text.startsWith(QStringLiteral("Временные сегменты: "))) return QStringLiteral("Temporary segments: ") + text.mid(21);
+        if (text.startsWith(QStringLiteral("Свободно примерно "))) return QStringLiteral("Approximately ") + text.mid(18);
+        if (text.startsWith(QStringLiteral("Открыть "))) return QStringLiteral("Open ") + text.mid(7);
+        if (text.startsWith(QStringLiteral("Захват идёт для монитора "))) return QStringLiteral("Capture is running for monitor ") + text.mid(26);
+        if (text.startsWith(QStringLiteral("Клип сохранён: "))) return QStringLiteral("Clip saved: ") + text.mid(14);
+        if (text.startsWith(QStringLiteral("Доступна новая версия "))) return QStringLiteral("A new version is available ") + text.mid(23);
+        if (text.startsWith(QStringLiteral("Лог содержит только технические события и не записывает кадры, звук или содержимое окон: "))) {
+            return QStringLiteral("The log contains technical events only and never records frames, audio, or window contents: ") +
+                   text.mid(QStringLiteral("Лог содержит только технические события и не записывает кадры, звук или содержимое окон: ").size());
+        }
+    } else {
+        if (text.startsWith(QStringLiteral("Clips: "))) return QStringLiteral("Клипы: ") + text.mid(7);
+        if (text.startsWith(QStringLiteral("Temporary segments: "))) return QStringLiteral("Временные сегменты: ") + text.mid(21);
+        if (text.startsWith(QStringLiteral("Approximately "))) return QStringLiteral("Свободно примерно ") + text.mid(14);
+        if (text.startsWith(QStringLiteral("Open "))) return QStringLiteral("Открыть ") + text.mid(5);
+        if (text.startsWith(QStringLiteral("Capture is running for monitor "))) return QStringLiteral("Захват идёт для монитора ") + text.mid(31);
+        if (text.startsWith(QStringLiteral("Clip saved: "))) return QStringLiteral("Клип сохранён: ") + text.mid(12);
+        if (text.startsWith(QStringLiteral("A new version is available "))) return QStringLiteral("Доступна новая версия ") + text.mid(27);
+        if (text.startsWith(QStringLiteral("The log contains technical events only and never records frames, audio, or window contents: "))) {
+            return QStringLiteral("Лог содержит только технические события и не записывает кадры, звук или содержимое окон: ") +
+                   text.mid(QStringLiteral("The log contains technical events only and never records frames, audio, or window contents: ").size());
+        }
     }
-    if (text.startsWith(QStringLiteral("Доступна новая версия "))) {
-        return QStringLiteral("A new version is available ") + text.mid(QStringLiteral("Доступна новая версия ").size());
+    if (text.startsWith(QStringLiteral("≈ "))) {
+        const QString russianSeparator = QStringLiteral(" на ");
+        const QString englishSeparator = QStringLiteral(" for ");
+        if (english && text.contains(russianSeparator)) {
+            QString result = text;
+            result.replace(russianSeparator, englishSeparator);
+            result.replace(QStringLiteral("выше лимита, экспорт будет остановлен"),
+                          QStringLiteral("above the limit; export will stop"));
+            result.replace(QStringLiteral("в пределах лимита"), QStringLiteral("within the limit"));
+            return result;
+        }
+        if (!english && text.contains(englishSeparator)) {
+            QString result = text;
+            result.replace(englishSeparator, russianSeparator);
+            result.replace(QStringLiteral("above the limit; export will stop"),
+                          QStringLiteral("выше лимита, экспорт будет остановлен"));
+            result.replace(QStringLiteral("within the limit"), QStringLiteral("в пределах лимита"));
+            return result;
+        }
     }
     return text;
+}
+
+void translateUiTree(QWidget* root, const QString& language) {
+    if (root == nullptr) {
+        return;
+    }
+    QList<QWidget*> widgets{root};
+    widgets.append(root->findChildren<QWidget*>());
+    for (QWidget* widget : widgets) {
+        if (auto* group = qobject_cast<QGroupBox*>(widget)) {
+            group->setTitle(localizedUiText(group->title(), language));
+        }
+        if (auto* button = qobject_cast<QAbstractButton*>(widget)) {
+            button->setText(localizedUiText(button->text(), language));
+        }
+        if (auto* label = qobject_cast<QLabel*>(widget)) {
+            label->setText(localizedUiText(label->text(), language));
+        }
+        if (auto* combo = qobject_cast<QComboBox*>(widget)) {
+            for (int index = 0; index < combo->count(); ++index) {
+                combo->setItemText(index, localizedUiText(combo->itemText(index), language));
+            }
+        }
+        if (auto* spin = qobject_cast<QSpinBox*>(widget)) {
+            spin->setSpecialValueText(localizedUiText(spin->specialValueText(), language));
+        }
+    }
+}
+
+QString localizeNotification(const QString& text, const QString& language) {
+    return localizedUiText(text, language);
 }
 
 bool validateLocalStoragePath(const QString& path, QString* reason) {
@@ -164,8 +400,9 @@ MainWindow::MainWindow(QWidget* parent)
     });
     connect(&recorder_, &Media::PortableSegmentRecorder::microphoneMuteChanged, this, [this](const bool muted) {
         if (trayMuteAction_ != nullptr) {
-            trayMuteAction_->setText(muted ? QStringLiteral("Включить микрофон")
-                                           : QStringLiteral("Выключить микрофон"));
+            trayMuteAction_->setText(localizedUiText(muted ? QStringLiteral("Включить микрофон")
+                                                          : QStringLiteral("Выключить микрофон"),
+                                                      QString::fromStdString(settings_.language)));
         }
         showToast(muted ? QStringLiteral("Микрофон выключен") : QStringLiteral("Микрофон включён"));
     });
@@ -177,7 +414,8 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&updater_, &Platform::UpdateChecker::updateAvailable, this,
             [this](const QString& version, const QUrl& url) {
                 latestReleaseUrl_ = url;
-                updateButton_->setText(QStringLiteral("Открыть %1").arg(version));
+                updateButton_->setText(localizedUiText(QStringLiteral("Открыть %1").arg(version),
+                                                       QString::fromStdString(settings_.language)));
                 showToast(QStringLiteral("Доступна новая версия %1.").arg(version));
             });
     connect(&updater_, &Platform::UpdateChecker::upToDate, this,
@@ -322,7 +560,21 @@ void MainWindow::buildUi() {
     rootLayout->addWidget(sidebar);
     rootLayout->addWidget(pages_, 1);
     setCentralWidget(root);
+    translateUiTree(root, QString::fromStdString(settings_.language));
     selectPage(0);
+}
+
+void MainWindow::rebuildUi() {
+    const int currentPage = pages_ == nullptr ? 0 : pages_->currentIndex();
+    if (QWidget* oldCentral = takeCentralWidget(); oldCentral != nullptr) {
+        delete oldCentral;
+    }
+    buildUi();
+    populateMonitorCombo();
+    applyTheme(settings_.extras.value("theme", std::string("dark")) != "light");
+    applyRecorderState();
+    selectPage(currentPage);
+    setupTray();
 }
 
 QWidget* MainWindow::buildOverviewPage() {
@@ -575,11 +827,12 @@ QWidget* MainWindow::buildVideoPage() {
         const int duration = durationSpin_ == nullptr ? settings_.buffer.durationSeconds : durationSpin_->value();
         const double estimatedMiB = static_cast<double>(settings_.video.customBitrateKbps) * duration / 8.0 / 1024.0;
         const bool overLimit = estimatedMiB > settings_.video.maxFileSizeMiB;
-        estimatedSizeLabel_->setText(QStringLiteral("≈ %1 MiB на %2 s; %3")
-                                         .arg(estimatedMiB, 0, 'f', 1)
-                                         .arg(duration)
-                                         .arg(overLimit ? QStringLiteral("выше лимита, экспорт будет остановлен")
-                                                        : QStringLiteral("в пределах лимита")));
+        estimatedSizeLabel_->setText(localizedUiText(QStringLiteral("≈ %1 MiB на %2 s; %3")
+                                                          .arg(estimatedMiB, 0, 'f', 1)
+                                                          .arg(duration)
+                                                          .arg(overLimit ? QStringLiteral("выше лимита, экспорт будет остановлен")
+                                                                         : QStringLiteral("в пределах лимита")),
+                                                     QString::fromStdString(settings_.language)));
         estimatedSizeLabel_->setStyleSheet(overLimit ? QStringLiteral("color: #D94841;") : QString());
     };
     connect(bitrateSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
@@ -736,24 +989,26 @@ QWidget* MainWindow::buildStoragePage() {
                    : QString::fromStdString(settings_.storage.clipsDirectory.string());
     };
     const auto refreshStorage = [this, path, storageState, selectedPath] {
+        const QString language = QString::fromStdString(settings_.language);
         const QString clipsPath = selectedPath();
-        path->setText(QStringLiteral("Клипы: %1").arg(clipsPath));
+        path->setText(localizedUiText(QStringLiteral("Клипы: %1").arg(clipsPath), language));
         const QStorageInfo storage(clipsPath);
         const double freeGiB = storage.isValid() && storage.isReady()
                                    ? static_cast<double>(storage.bytesAvailable()) / 1024.0 / 1024.0 / 1024.0
                                    : 0.0;
         const QString state = !storage.isValid() || !storage.isReady()
-                                  ? QStringLiteral("Носитель недоступен или ещё не готов.")
+                                  ? localizedUiText(QStringLiteral("Носитель недоступен или ещё не готов."), language)
                                   : storage.isReadOnly()
-                                        ? QStringLiteral("Носитель доступен только для чтения.")
-                                        : QStringLiteral("Свободно примерно %1 GiB.").arg(freeGiB, 0, 'f', 1);
+                                        ? localizedUiText(QStringLiteral("Носитель доступен только для чтения."), language)
+                                        : localizedUiText(QStringLiteral("Свободно примерно %1 GiB.").arg(freeGiB, 0, 'f', 1), language);
         storageState->setText(state);
     };
     refreshStorage();
     const QString temporaryPath = recorder_.temporaryDirectory().isEmpty()
                                       ? QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/segments"
                                       : recorder_.temporaryDirectory();
-    auto* temporary = new QLabel(QStringLiteral("Временные сегменты: %1").arg(temporaryPath), page);
+    auto* temporary = new QLabel(localizedUiText(QStringLiteral("Временные сегменты: %1").arg(temporaryPath),
+                                                 QString::fromStdString(settings_.language)), page);
     temporary->setWordWrap(true);
     layout->addWidget(temporary);
     auto* clearTemporary = new QPushButton(QStringLiteral("Очистить временные сегменты и буфер"), page);
@@ -770,7 +1025,9 @@ QWidget* MainWindow::buildStoragePage() {
         }
         QString reason;
         if (!validateLocalStoragePath(selected, &reason)) {
-            QMessageBox::warning(page, QStringLiteral("Каталог недоступен"), reason);
+            QMessageBox::warning(page,
+                                 localizedUiText(QStringLiteral("Каталог недоступен"), QString::fromStdString(settings_.language)),
+                                 localizedUiText(reason, QString::fromStdString(settings_.language)));
             return;
         }
         settings_.storage.clipsDirectory = std::filesystem::path(selected.toStdString());
@@ -863,12 +1120,13 @@ QWidget* MainWindow::buildAdvancedPage() {
         settings_.buffer.durationSeconds = value;
         if (estimatedSizeLabel_ != nullptr) {
             const double estimatedMiB = static_cast<double>(settings_.video.customBitrateKbps) * value / 8.0 / 1024.0;
-            estimatedSizeLabel_->setText(QStringLiteral("≈ %1 MiB на %2 s; %3")
-                                             .arg(estimatedMiB, 0, 'f', 1)
-                                             .arg(value)
-                                             .arg(estimatedMiB > settings_.video.maxFileSizeMiB
-                                                      ? QStringLiteral("выше лимита, экспорт будет остановлен")
-                                                      : QStringLiteral("в пределах лимита")));
+            estimatedSizeLabel_->setText(localizedUiText(QStringLiteral("≈ %1 MiB на %2 s; %3")
+                                                              .arg(estimatedMiB, 0, 'f', 1)
+                                                              .arg(value)
+                                                              .arg(estimatedMiB > settings_.video.maxFileSizeMiB
+                                                                       ? QStringLiteral("выше лимита, экспорт будет остановлен")
+                                                                       : QStringLiteral("в пределах лимита")),
+                                                         QString::fromStdString(settings_.language)));
             estimatedSizeLabel_->setStyleSheet(estimatedMiB > settings_.video.maxFileSizeMiB
                                                     ? QStringLiteral("color: #D94841;") : QString());
         }
@@ -882,6 +1140,11 @@ QWidget* MainWindow::buildAdvancedPage() {
     themeCombo_->addItems({QStringLiteral("Тёмная"), QStringLiteral("Светлая")});
     themeCombo_->setCurrentIndex(settings_.extras.value("theme", std::string("dark")) == "light" ? 1 : 0);
     form->addRow(QStringLiteral("Тема"), themeCombo_);
+    languageCombo_ = new QComboBox(page);
+    languageCombo_->addItem(QStringLiteral("Русский"), QStringLiteral("ru"));
+    languageCombo_->addItem(QStringLiteral("English"), QStringLiteral("en"));
+    languageCombo_->setCurrentIndex(settings_.language == "en" ? 1 : 0);
+    form->addRow(QStringLiteral("Язык интерфейса"), languageCombo_);
     layout->addLayout(form);
     ffmpegLabel_ = new QLabel(QStringLiteral("FFmpeg: проверка capability…"), page);
     ffmpegLabel_->setWordWrap(true);
@@ -896,6 +1159,7 @@ QWidget* MainWindow::buildAdvancedPage() {
     layout->addWidget(description(QStringLiteral("Телеметрия отключена. Проверка обновлений будет ручной через GitHub Releases и по умолчанию отключена."), page));
     layout->addStretch();
     connect(themeCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::chooseTheme);
+    connect(languageCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::chooseLanguage);
     connect(ramLimitSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
             [this](int value) { settings_.buffer.ramLimitMiB = value; });
     connect(updateButton_, &QPushButton::clicked, this, &MainWindow::checkForUpdates);
@@ -1019,11 +1283,12 @@ void MainWindow::chooseRegion() {
     settings_.capture.regionWidth = selection.width();
     settings_.capture.regionHeight = selection.height();
     sourceCombo_->setCurrentIndex(sourceCombo_->findData(QStringLiteral("custom_region")));
-    regionButton_->setText(QStringLiteral("%1 × %2 (%3, %4)")
-                               .arg(selection.width())
-                               .arg(selection.height())
-                               .arg(selection.x())
-                               .arg(selection.y()));
+    regionButton_->setText(localizedUiText(QStringLiteral("%1 × %2 (%3, %4)")
+                                               .arg(selection.width())
+                                               .arg(selection.height())
+                                               .arg(selection.x())
+                                               .arg(selection.y()),
+                                           QString::fromStdString(settings_.language)));
 }
 
 void MainWindow::checkForUpdates() {
@@ -1032,18 +1297,18 @@ void MainWindow::checkForUpdates() {
         return;
     }
     updateButton_->setEnabled(false);
-    updateButton_->setText(QStringLiteral("Проверка…"));
+    updateButton_->setText(localizedUiText(QStringLiteral("Проверка…"), QString::fromStdString(settings_.language)));
     connect(&updater_, &Platform::UpdateChecker::upToDate, this, [this] {
         updateButton_->setEnabled(true);
-        updateButton_->setText(QStringLiteral("Проверить обновления"));
+        updateButton_->setText(localizedUiText(QStringLiteral("Проверить обновления"), QString::fromStdString(settings_.language)));
     }, Qt::SingleShotConnection);
     connect(&updater_, &Platform::UpdateChecker::noRelease, this, [this] {
         updateButton_->setEnabled(true);
-        updateButton_->setText(QStringLiteral("Проверить обновления"));
+        updateButton_->setText(localizedUiText(QStringLiteral("Проверить обновления"), QString::fromStdString(settings_.language)));
     }, Qt::SingleShotConnection);
     connect(&updater_, &Platform::UpdateChecker::error, this, [this] {
         updateButton_->setEnabled(true);
-        updateButton_->setText(QStringLiteral("Проверить обновления"));
+        updateButton_->setText(localizedUiText(QStringLiteral("Проверить обновления"), QString::fromStdString(settings_.language)));
     }, Qt::SingleShotConnection);
     connect(&updater_, &Platform::UpdateChecker::updateAvailable, this, [this] {
         updateButton_->setEnabled(true);
@@ -1099,6 +1364,16 @@ void MainWindow::chooseTheme(const int index) {
     applyTheme(index == 0);
 }
 
+void MainWindow::chooseLanguage(const int index) {
+    const std::string language = index == 1 ? "en" : "ru";
+    if (settings_.language == language) {
+        return;
+    }
+    settings_.language = language;
+    saveSettings();
+    rebuildUi();
+}
+
 void MainWindow::handleHotkey(const Platform::HotkeyAction action) {
     switch (action) {
     case Platform::HotkeyAction::Save: saveClip(); break;
@@ -1113,14 +1388,16 @@ void MainWindow::showRecorderError(const QString& text) {
     Platform::Diagnostics::append(QStringLiteral("ERROR"), text);
     trayError_ = true;
     showToast(text, true);
-    QMessageBox dialog(QMessageBox::Critical, QStringLiteral("LastFrame — ошибка"), text,
+    const QString language = QString::fromStdString(settings_.language);
+    QMessageBox dialog(QMessageBox::Critical, localizedUiText(QStringLiteral("LastFrame — ошибка"), language),
+                       localizedUiText(text, language),
                        QMessageBox::NoButton, this);
-    dialog.setInformativeText(QStringLiteral("Проверьте настройки захвата или перезапустите сессию. Старые сохранённые клипы не затрагиваются."));
-    dialog.setDetailedText(QStringLiteral("Технический код и подробности записаны в локальный лог:\n%1")
-                               .arg(Platform::Diagnostics::logPath()));
-    auto* copyButton = dialog.addButton(QStringLiteral("Скопировать диагностику"), QMessageBox::ActionRole);
-    auto* restartButton = dialog.addButton(QStringLiteral("Перезапустить захват"), QMessageBox::AcceptRole);
-    dialog.addButton(QStringLiteral("Закрыть"), QMessageBox::RejectRole);
+    dialog.setInformativeText(localizedUiText(QStringLiteral("Проверьте настройки захвата или перезапустите сессию. Старые сохранённые клипы не затрагиваются."), language));
+    dialog.setDetailedText(localizedUiText(QStringLiteral("Технический код и подробности записаны в локальный лог:\n%1")
+                                                .arg(Platform::Diagnostics::logPath()), language));
+    auto* copyButton = dialog.addButton(localizedUiText(QStringLiteral("Скопировать диагностику"), language), QMessageBox::ActionRole);
+    auto* restartButton = dialog.addButton(localizedUiText(QStringLiteral("Перезапустить захват"), language), QMessageBox::AcceptRole);
+    dialog.addButton(localizedUiText(QStringLiteral("Закрыть"), language), QMessageBox::RejectRole);
     dialog.exec();
     if (dialog.clickedButton() == copyButton) {
         copyDiagnostics();
@@ -1184,19 +1461,22 @@ void MainWindow::applyTheme(const bool dark) {
 void MainWindow::applyRecorderState() {
     const bool active = recorder_.isRecording();
     const bool paused = recorder_.isPaused();
-    startButton_->setText(active || paused ? QStringLiteral("Остановить") : QStringLiteral("Начать буфер"));
-    pauseButton_->setText(paused ? QStringLiteral("Продолжить") : QStringLiteral("Пауза"));
+    const QString language = QString::fromStdString(settings_.language);
+    startButton_->setText(localizedUiText(active || paused ? QStringLiteral("Остановить") : QStringLiteral("Начать буфер"), language));
+    pauseButton_->setText(localizedUiText(paused ? QStringLiteral("Продолжить") : QStringLiteral("Пауза"), language));
     pauseButton_->setEnabled(active || paused);
     saveButton_->setEnabled(active || paused);
-    statusLabel_->setText(paused ? QStringLiteral("Пауза") : active ? QStringLiteral("Активен") : QStringLiteral("Выключен"));
-    statusDetails_->setText(paused ? QStringLiteral("Новые кадры временно не поступают; накопленные сегменты доступны для сохранения.")
-                             : active ? QStringLiteral("Захват идёт для монитора %1.").arg(monitorCombo_->currentText())
-                                     : QStringLiteral("Нажмите «Начать буфер», чтобы начать захват."));
+    statusLabel_->setText(localizedUiText(paused ? QStringLiteral("Пауза") : active ? QStringLiteral("Активен") : QStringLiteral("Выключен"), language));
+    statusDetails_->setText(localizedUiText(
+        paused ? QStringLiteral("Новые кадры временно не поступают; накопленные сегменты доступны для сохранения.")
+               : active ? QStringLiteral("Захват идёт для монитора %1.").arg(monitorCombo_->currentText())
+                        : QStringLiteral("Нажмите «Начать буфер», чтобы начать захват."), language));
     updateTrayIcon();
     if (ffmpegLabel_ != nullptr) {
-        QString details = capabilitySummary_.isEmpty() ? QStringLiteral("FFmpeg: поиск capability при старте") : capabilitySummary_;
+        QString details = capabilitySummary_.isEmpty() ? localizedUiText(QStringLiteral("FFmpeg: поиск capability при старте"), language)
+                                                        : localizedUiText(capabilitySummary_, language);
         if (!recorder_.ffmpegPath().isEmpty()) {
-            details += QStringLiteral("\nКаталог сегментов: %1").arg(recorder_.temporaryDirectory());
+            details += QStringLiteral("\n") + localizedUiText(QStringLiteral("Каталог сегментов: %1").arg(recorder_.temporaryDirectory()), language);
         }
         ffmpegLabel_->setText(details);
     }
@@ -1226,13 +1506,14 @@ void MainWindow::showFirstRunDialog() {
         applyRecorderState();
     };
 
-    QMessageBox dialog(QMessageBox::Information, QStringLiteral("Добро пожаловать в LastFrame"),
-                       QStringLiteral("Начальная настройка готова. Профиль Auto использует выбранный монитор, безопасный FPS и аппаратный H.264 с fallback."),
+    const QString language = QString::fromStdString(settings_.language);
+    QMessageBox dialog(QMessageBox::Information, localizedUiText(QStringLiteral("Добро пожаловать в LastFrame"), language),
+                       localizedUiText(QStringLiteral("Начальная настройка готова. Профиль Auto использует выбранный монитор, безопасный FPS и аппаратный H.264 с fallback."), language),
                        QMessageBox::NoButton, this);
-    dialog.setInformativeText(QStringLiteral("Захват не запускается автоматически. Можно оставить Auto или открыть страницы настроек для точной конфигурации."));
-    auto* autoButton = dialog.addButton(QStringLiteral("Оставить Auto"), QMessageBox::AcceptRole);
-    auto* settingsButton = dialog.addButton(QStringLiteral("Открыть настройки"), QMessageBox::ActionRole);
-    dialog.addButton(QStringLiteral("Позже"), QMessageBox::RejectRole);
+    dialog.setInformativeText(localizedUiText(QStringLiteral("Захват не запускается автоматически. Можно оставить Auto или открыть страницы настроек для точной конфигурации."), language));
+    auto* autoButton = dialog.addButton(localizedUiText(QStringLiteral("Оставить Auto"), language), QMessageBox::AcceptRole);
+    auto* settingsButton = dialog.addButton(localizedUiText(QStringLiteral("Открыть настройки"), language), QMessageBox::ActionRole);
+    dialog.addButton(localizedUiText(QStringLiteral("Позже"), language), QMessageBox::RejectRole);
     dialog.exec();
     if (dialog.clickedButton() == autoButton) {
         autoProfile();
@@ -1255,7 +1536,8 @@ void MainWindow::showToast(const QString& text, const bool isError) {
         trayError_ = true;
         updateTrayIcon();
     }
-    statusDetails_->setText(text);
+    const QString language = QString::fromStdString(settings_.language);
+    statusDetails_->setText(localizedUiText(text, language));
     statusLabel_->setStyleSheet(isError ? QStringLiteral("color: #D94841;") : QStringLiteral("color: #ED760E;"));
     if (!settings_.notifications.enabled || !settings_.notifications.overlayEnabled) {
         return;
@@ -1279,19 +1561,42 @@ void MainWindow::showToast(const QString& text, const bool isError) {
 }
 
 void MainWindow::setupTray() {
-    tray_ = new QSystemTrayIcon(this);
+    if (tray_ == nullptr) {
+        tray_ = new QSystemTrayIcon(this);
+        connect(tray_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+            if (reason == QSystemTrayIcon::Trigger) {
+                showFromSingleInstance();
+            }
+        });
+        connect(tray_, &QSystemTrayIcon::messageClicked, this, [this] {
+            if (lastSavedPath_.isEmpty()) {
+                return;
+            }
+#if defined(Q_OS_WIN)
+            QProcess::startDetached(QStringLiteral("explorer.exe"),
+                                    {QStringLiteral("/select,"), QDir::toNativeSeparators(lastSavedPath_)});
+#else
+            QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(lastSavedPath_).absolutePath()));
+#endif
+        });
+    }
+    if (QMenu* oldMenu = tray_->contextMenu(); oldMenu != nullptr) {
+        tray_->setContextMenu(nullptr);
+        oldMenu->deleteLater();
+    }
+    const QString language = QString::fromStdString(settings_.language);
     updateTrayIcon();
-    tray_->setToolTip(QStringLiteral("LastFrame"));
+    tray_->setToolTip(localizedUiText(QStringLiteral("LastFrame"), language));
     auto* menu = new QMenu(this);
-    auto* save = menu->addAction(QStringLiteral("Сохранить клип"));
-    auto* toggle = menu->addAction(QStringLiteral("Начать/остановить буфер"));
-    auto* pause = menu->addAction(QStringLiteral("Пауза/продолжение"));
+    auto* save = menu->addAction(localizedUiText(QStringLiteral("Сохранить клип"), language));
+    auto* toggle = menu->addAction(localizedUiText(QStringLiteral("Начать/остановить буфер"), language));
+    auto* pause = menu->addAction(localizedUiText(QStringLiteral("Пауза/продолжение"), language));
     menu->addSeparator();
-    auto* clear = menu->addAction(QStringLiteral("Очистить буфер"));
-    trayMuteAction_ = menu->addAction(QStringLiteral("Выключить микрофон"));
-    auto* openClips = menu->addAction(QStringLiteral("Открыть папку клипов"));
-    auto* settings = menu->addAction(QStringLiteral("Настройки"));
-    auto* quit = menu->addAction(QStringLiteral("Выход"));
+    auto* clear = menu->addAction(localizedUiText(QStringLiteral("Очистить буфер"), language));
+    trayMuteAction_ = menu->addAction(localizedUiText(QStringLiteral("Выключить микрофон"), language));
+    auto* openClips = menu->addAction(localizedUiText(QStringLiteral("Открыть папку клипов"), language));
+    auto* settings = menu->addAction(localizedUiText(QStringLiteral("Настройки"), language));
+    auto* quit = menu->addAction(localizedUiText(QStringLiteral("Выход"), language));
     connect(save, &QAction::triggered, this, &MainWindow::saveClip);
     connect(toggle, &QAction::triggered, this, &MainWindow::startOrStop);
     connect(pause, &QAction::triggered, this, &MainWindow::pauseOrResume);
@@ -1307,22 +1612,6 @@ void MainWindow::setupTray() {
     connect(settings, &QAction::triggered, this, &MainWindow::showFromSingleInstance);
     connect(quit, &QAction::triggered, this, [this] { forceQuit_ = true; qApp->quit(); });
     tray_->setContextMenu(menu);
-    connect(tray_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
-        if (reason == QSystemTrayIcon::Trigger) {
-            showFromSingleInstance();
-        }
-    });
-    connect(tray_, &QSystemTrayIcon::messageClicked, this, [this] {
-        if (lastSavedPath_.isEmpty()) {
-            return;
-        }
-#if defined(Q_OS_WIN)
-        QProcess::startDetached(QStringLiteral("explorer.exe"),
-                                {QStringLiteral("/select,"), QDir::toNativeSeparators(lastSavedPath_)});
-#else
-        QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(lastSavedPath_).absolutePath()));
-#endif
-    });
     tray_->show();
 }
 
