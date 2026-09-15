@@ -125,3 +125,37 @@ jobs:
         with:
           name: LastFrame-windows-x64-portable
           path: LastFrame-windows-x64-portable.zip
+
+  macos-ui:
+    name: macOS arm64 UI build
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python for Qt installer
+        uses: actions/setup-python@v6
+        id: qt-python
+        with:
+          python-version: '3.13'
+
+      - name: Install Qt
+        shell: bash
+        env:
+          QT_PYTHON: ${{ steps.qt-python.outputs.python-path }}
+        run: |
+          "$QT_PYTHON" -m pip install --disable-pip-version-check --no-warn-script-location "aqtinstall==3.3.0" "py7zr==1.1.0"
+          "$QT_PYTHON" -m aqt install-qt mac desktop 6.8.3 clang_64 --outputdir "$RUNNER_WORKSPACE/Qt"
+          echo "CMAKE_PREFIX_PATH=$RUNNER_WORKSPACE/Qt/6.8.3/macos" >> "$GITHUB_ENV"
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Configure
+        run: cmake -S . -B build/macos -G Ninja -DLASTFRAME_BUILD_UI=ON -DLASTFRAME_BUILD_TESTS=ON -DLASTFRAME_BUILD_SMOKE=OFF
+
+      - name: Build
+        run: cmake --build build/macos --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build/macos --output-on-failure

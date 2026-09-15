@@ -87,6 +87,9 @@
 - При полной потере native WASAPI endpoint выполняются такие же три reattach-попытки,
   затем portable FFmpeg audio; потеря только одного источника остаётся degraded
   состоянием с продолжением второго источника и silence-fill.
+- На macOS global hotkeys используют Carbon Event Hot Keys с абстрактными
+  `CTRL/ALT/SHIFT/META` модификаторами; при отсутствии Accessibility/Input Monitoring
+  permission показывается отдельный `hotkey_conflict` с рекомендацией разрешить доступ.
 - Страница Notifications с настройками системных уведомлений, языка встроенных
   сообщений, четырёх углов, длительности и прозрачности click-through toast overlay
   с анимированным индикатором; на Windows overlay запрашивает
@@ -102,6 +105,8 @@
   пиксели native capture; custom region масштабируется по фактическому DPI/размеру
   дисплея перед DXGI/WGC/FFmpeg. Региональный smoke повторён с `QT_SCALE_FACTOR=1.5`.
 - GitHub Actions для core tests и Windows portable artifact.
+- GitHub Actions дополнительно компилирует Qt UI на `macos-14` arm64,
+  включая Carbon hotkey integration; runtime capture smoke macOS пока не заявляется.
 
 ## Оставшиеся обязательные срезы по ТЗ
 
@@ -111,7 +116,9 @@
    вместо процесса FFmpeg; CUDA-путь с безопасным CPU fallback уже реализован.
 3. Завершить ручную матрицу DPI для нескольких Windows-мониторов и native
    macOS ScreenCaptureKit/Linux PipeWire/portal backends.
-4. Интеграционные тесты на RTX 3070 и полная матрица Windows/Linux/macOS arm64.
+4. Интеграционные тесты на RTX 3070 и полная матрица Windows/Linux/macOS arm64;
+   macOS Carbon hotkeys добавлены, но native ScreenCaptureKit/аудио и Linux global
+   hotkeys ещё требуют platform-specific implementation.
 
 До реализации следующих срезов UI честно показывает, что segment recorder
 требует доступный FFmpeg; native DXGI/WGC и native WASAPI capability включаются

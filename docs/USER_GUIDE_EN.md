@@ -33,3 +33,5 @@ The full interface language is selected on Advanced → Interface language. Swit
 Custom-region coordinates are stored logically and converted to the monitor's physical pixels before capture, so Windows scaling is accounted for. A manual release check is still required for multi-monitor setups with different DPI values.
 
 Storage lets the user choose, open, and clean the local clip directory. Completed segments stay in RAM up to the 70% soft limit and spill over to the local temporary directory when needed.
+
+On macOS, global hotkeys use Carbon Event Hot Keys. If macOS denies Accessibility/Input Monitoring access, LastFrame reports the conflict and points to the required permission instead of silently accepting the shortcut.

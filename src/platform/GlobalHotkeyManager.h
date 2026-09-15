@@ -40,9 +40,16 @@ private:
     struct RegisteredHotkey {
         int id = 0;
         HotkeyAction action = HotkeyAction::Save;
+#if defined(Q_OS_MAC)
+        void* nativeHandle = nullptr;
+#endif
     };
 
     [[nodiscard]] bool registerOne(int id, HotkeyAction action, const QString& sequence);
+#if defined(Q_OS_MAC)
+    void emitMacHotkey(int id);
+    void* nativeEventHandler_ = nullptr;
+#endif
     QVector<RegisteredHotkey> registered_;
 };
 
