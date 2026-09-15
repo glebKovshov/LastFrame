@@ -17,12 +17,33 @@
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QTemporaryFile>
+#include <QtConcurrent/QtConcurrentRun>
 
 #include <chrono>
 #include <algorithm>
 #include <utility>
 
 namespace LastFrame::Media {
+
+namespace {
+
+bool materializeSegments(const QList<QPair<QString, QByteArray>>& segments) {
+    for (const auto& segment : segments) {
+        const QString& path = segment.first;
+        if (QFileInfo::exists(path)) {
+            continue;
+        }
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly) || file.write(segment.second) != segment.second.size()) {
+            file.close();
+            return false;
+        }
+        file.close();
+    }
+    return true;
+}
+
+} // namespace
 
 PortableSegmentRecorder::PortableSegmentRecorder(QObject* parent) : QObject(parent) {
 #if defined(Q_OS_WIN)
@@ -74,6 +95,11 @@ PortableSegmentRecorder::PortableSegmentRecorder(QObject* parent) : QObject(pare
 PortableSegmentRecorder::~PortableSegmentRecorder() {
     stop();
     for (ExportJob* job : std::as_const(exports_)) {
+        if (job->materializer != nullptr) {
+            job->materializer->future().waitForFinished();
+            delete job->materializer;
+            job->materializer = nullptr;
+        }
         if (job->process != nullptr) {
             job->process->kill();
             job->process->deleteLater();
@@ -283,11 +309,6 @@ void PortableSegmentRecorder::saveClip() {
         return;
     }
 
-    if (!materializeRamSegments()) {
-        emit error(QStringLiteral("[export_failed] Не удалось подготовить RAM-сегменты для экспорта."));
-        return;
-    }
-
     const QString clipsDirectory = settings_.storage.clipsDirectory.empty()
                                        ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame"
                                        : QString::fromStdString(settings_.storage.clipsDirectory.string());
@@ -316,36 +337,85 @@ void PortableSegmentRecorder::saveClip() {
     }
     reservation.close();
 
+    auto* job = new ExportJob;
+    job->temporaryPath = QString::fromStdString(target.string());
+    job->temporaryPath += ".tmp";
+    job->finalPath = finalPath;
+    job->container = container;
+    job->snapshotFiles = files;
+    QFile::remove(job->temporaryPath);
+    exports_.push_back(job);
+
+    QList<QPair<QString, QByteArray>> materialization;
+    for (const QString& file : files) {
+        const auto cached = ramSegments_.constFind(file);
+        if (cached != ramSegments_.cend()) {
+            materialization.append(qMakePair(file, cached.value()));
+        }
+    }
+    if (materialization.isEmpty()) {
+        beginExport(job);
+    } else {
+        job->materializer = new QFutureWatcher<bool>(this);
+        connect(job->materializer, &QFutureWatcher<bool>::finished, this, [this, job] {
+            const bool success = job->materializer->future().result();
+            job->materializer->deleteLater();
+            job->materializer = nullptr;
+            if (!success) {
+                QFile::remove(job->temporaryPath);
+                QFile::remove(job->finalPath);
+                exports_.removeOne(job);
+                delete job;
+                emit error(QStringLiteral("[export_failed] Не удалось подготовить RAM-сегменты для экспорта."));
+                return;
+            }
+            beginExport(job);
+        });
+        job->materializer->setFuture(QtConcurrent::run([materialization = std::move(materialization)] {
+            return materializeSegments(materialization);
+        }));
+    }
+    emit message(QStringLiteral("Экспорт клипа поставлен в очередь."));
+}
+
+void PortableSegmentRecorder::beginExport(ExportJob* job) {
+    if (job == nullptr) {
+        return;
+    }
     auto* listFile = new QTemporaryFile(segmentDirectory_ + "/concat-XXXXXX.txt", this);
     listFile->setAutoRemove(false);
     if (!listFile->open()) {
-        QFile::remove(finalPath);
+        QFile::remove(job->finalPath);
+        exports_.removeOne(job);
         listFile->deleteLater();
+        delete job;
         emit error(QStringLiteral("[export_failed] Не удалось создать список сегментов для экспорта."));
         return;
     }
     QByteArray content("ffconcat version 1.0\n");
-    for (const QString& file : files) {
+    for (const QString& file : std::as_const(job->snapshotFiles)) {
         content += "file '" + escapeConcatPath(file).toUtf8() + "'\n";
         // Every closed capture segment is cut on a one-second boundary. The
         // explicit duration gives the concat demuxer a monotonic timeline
         // when Matroska packet timestamps restart at zero per segment.
         content += "duration 1.0\n";
     }
-    listFile->write(content);
+    if (listFile->write(content) != content.size()) {
+        listFile->close();
+        listFile->remove();
+        listFile->deleteLater();
+        QFile::remove(job->finalPath);
+        exports_.removeOne(job);
+        delete job;
+        emit error(QStringLiteral("[export_failed] Не удалось записать список сегментов для экспорта."));
+        return;
+    }
     listFile->close();
 
-    auto* job = new ExportJob;
     job->listFile = listFile;
     job->listPath = listFile->fileName();
-    job->temporaryPath = QString::fromStdString(target.string());
-    job->temporaryPath += ".tmp";
-    job->finalPath = finalPath;
-    QFile::remove(job->temporaryPath);
     job->process = new QProcess(this);
     job->process->setProcessChannelMode(QProcess::MergedChannels);
-    exports_.push_back(job);
-
     connect(job->process, &QProcess::finished, this,
             [this, job](int code, QProcess::ExitStatus status) { finishExport(job, code, status); });
     connect(job->process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
@@ -358,7 +428,7 @@ void PortableSegmentRecorder::saveClip() {
         QStringLiteral("-f"), QStringLiteral("concat"), QStringLiteral("-safe"), QStringLiteral("0"),
         QStringLiteral("-i"), job->listPath,
     };
-    if (container == QStringLiteral("mkv")) {
+    if (job->container == QStringLiteral("mkv")) {
         // FFmpeg's Matroska muxer rejects the restarted packet timestamps
         // from concat'ed one-second segments when they are stream-copied.
         // Re-encode this less latency-sensitive format for a valid timeline.
@@ -369,7 +439,7 @@ void PortableSegmentRecorder::saveClip() {
     } else {
         args << QStringLiteral("-c") << QStringLiteral("copy");
     }
-    if (container == QStringLiteral("mp4")) {
+    if (job->container == QStringLiteral("mp4")) {
         args << QStringLiteral("-movflags") << QStringLiteral("+faststart");
     }
     const qint64 maxBytes = static_cast<qint64>(settings_.video.maxFileSizeMiB) * 1024 * 1024;
@@ -377,10 +447,9 @@ void PortableSegmentRecorder::saveClip() {
         args << QStringLiteral("-fs") << QString::number(maxBytes);
     }
     args << QStringLiteral("-f")
-         << (container == QStringLiteral("mkv") ? QStringLiteral("matroska") : container)
+         << (job->container == QStringLiteral("mkv") ? QStringLiteral("matroska") : job->container)
          << job->temporaryPath;
     job->process->start(ffmpegPath_, args);
-    emit message(QStringLiteral("Экспорт клипа поставлен в очередь."));
 }
 
 void PortableSegmentRecorder::setMicrophoneMuted(const bool muted) {
@@ -735,21 +804,6 @@ QStringList PortableSegmentRecorder::segmentFiles() const {
     files.removeDuplicates();
     std::sort(files.begin(), files.end());
     return files;
-}
-
-bool PortableSegmentRecorder::materializeRamSegments() {
-    for (auto it = ramSegments_.cbegin(); it != ramSegments_.cend(); ++it) {
-        if (QFileInfo::exists(it.key())) {
-            continue;
-        }
-        QFile file(it.key());
-        if (!file.open(QIODevice::WriteOnly) || file.write(it.value()) != it.value().size()) {
-            file.close();
-            return false;
-        }
-        file.close();
-    }
-    return true;
 }
 
 void PortableSegmentRecorder::promoteClosedSegmentsToRam() {

@@ -64,7 +64,7 @@ if(LASTFRAME_BUILD_TESTS)
 endif()
 
 if(LASTFRAME_BUILD_UI)
-    find_package(Qt6 6.8 COMPONENTS Core Gui Widgets Network QUIET)
+    find_package(Qt6 6.8 COMPONENTS Core Gui Widgets Network Concurrent QUIET)
     if(Qt6_FOUND)
         qt_standard_project_setup()
 
@@ -95,6 +95,7 @@ if(LASTFRAME_BUILD_UI)
             Qt6::Gui
             Qt6::Widgets
             Qt6::Network
+            Qt6::Concurrent
         )
 
         target_include_directories(LastFrame PRIVATE src)
@@ -136,6 +137,7 @@ if(LASTFRAME_BUILD_UI)
                 Qt6::Gui
                 Qt6::Network
                 Qt6::Widgets
+                Qt6::Concurrent
             )
             if(WIN32)
                 target_sources(lastframe_recorder_smoke PRIVATE

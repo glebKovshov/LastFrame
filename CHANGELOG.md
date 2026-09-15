@@ -4,6 +4,8 @@
 
 - Added hybrid RAM retention for completed segments with a 70% soft limit,
   disk spillover and export-time materialization without stopping capture.
+- RAM-segment materialization now runs on a bounded QtConcurrent worker path,
+  keeping Save hotkeys and the UI thread free from large synchronous writes.
 - Added notification language, corner, duration and opacity settings with JSON validation.
 - Added local clip-directory selection, temporary-segment visibility, log opening and
   tray/Storage actions for opening the clips directory.

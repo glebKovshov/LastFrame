@@ -11,7 +11,7 @@ LastFrame — локальная portable-утилита для сохранен
 - Windows 10 22H2 или Windows 11 x64;
 - Visual Studio 2022 с workload **Desktop development with C++**;
 - CMake 3.28+ и Ninja;
-- Qt 6.8+ (компоненты Core, Gui, Widgets, Network);
+- Qt 6.8+ (компоненты Core, Gui, Widgets, Network, Concurrent);
 - portable `ffmpeg.exe` рядом с приложением или в `PATH`.
 
 ```powershell

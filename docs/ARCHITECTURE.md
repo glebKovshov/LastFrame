@@ -8,7 +8,7 @@ GlobalHotkeyManager / MainWindow / SystemTray
               v
       PortableSegmentRecorder
        |       |       |
-       |       |       +--> bounded export queue
+       |       |       +--> bounded export queue + background RAM materializer
        |       +----------> FFmpeg mux/export + atomic rename
        +------------------> native DXGI capture -> raw BGRA pipe
                               Windows Graphics Capture fallback -> raw BGRA pipe
@@ -39,10 +39,11 @@ mixed samples before a native audio backend hands them to the media layer.
 
 ## Data and failure boundaries
 
-- Capture writes short immutable Matroska segments into the configured local
-  temporary directory.
-- Save snapshots only closed segments, then exports to `*.tmp` and atomically
-  renames the final file. Existing user clips are never removed by recovery.
+- Capture writes short immutable Matroska segments into RAM up to the configured
+  70% soft limit and uses the configured local temporary directory as spillover.
+- Save snapshots only closed segments; any RAM materialization runs off the UI
+  thread, then export writes to `*.tmp` and atomically renames the final file.
+  Existing user clips are never removed by recovery.
 - Audio startup is progressive: native WASAPI mixer, portable FFmpeg system/mic
   inputs, then video-only. Missing sources are filled with silence by the mixer.
 - Capture startup is progressive: native DXGI Desktop Duplication, Windows

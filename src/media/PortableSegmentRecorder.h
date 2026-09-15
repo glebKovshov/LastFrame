@@ -7,6 +7,7 @@
 #include <QByteArray>
 #include <QList>
 #include <QMap>
+#include <QFutureWatcher>
 #include <QTimer>
 
 #include <chrono>
@@ -65,6 +66,9 @@ private:
         QString listPath;
         QString temporaryPath;
         QString finalPath;
+        QString container;
+        QStringList snapshotFiles;
+        QFutureWatcher<bool>* materializer = nullptr;
     };
 
     [[nodiscard]] QString locateFfmpeg() const;
@@ -73,7 +77,6 @@ private:
     [[nodiscard]] int nextSegmentNumber() const;
     [[nodiscard]] QString escapeConcatPath(const QString& path) const;
     [[nodiscard]] QString selectedMonitorLabel() const;
-    [[nodiscard]] bool materializeRamSegments();
     [[nodiscard]] bool prepareNativeCapture();
     [[nodiscard]] bool prepareWindowsGraphicsCapture();
     [[nodiscard]] bool prepareNativeAudio();
@@ -84,6 +87,7 @@ private:
     void promoteClosedSegmentsToRam();
     void evictOldSegments();
     void startProcess(bool withAudio, bool announceStarted = true);
+    void beginExport(ExportJob* job);
     void finishExport(ExportJob* job, int exitCode, QProcess::ExitStatus status);
 
     LastFrame::Core::Settings settings_;
