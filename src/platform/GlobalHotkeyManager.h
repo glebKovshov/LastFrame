@@ -28,6 +28,11 @@ public:
                                        const QString& pause, const QString& toggleCapture,
                                        const QString& muteMicrophone);
     void unregisterHotkeys();
+#if defined(Q_OS_MAC)
+    // Carbon delivers the event outside Qt's native event filter. The handler
+    // queues back into the Qt object before dispatching the public signal.
+    void emitMacHotkey(int id);
+#endif
 
     [[nodiscard]] bool nativeEventFilter(const QByteArray& eventType, void* message,
                                          qintptr* result) override;
@@ -47,7 +52,6 @@ private:
 
     [[nodiscard]] bool registerOne(int id, HotkeyAction action, const QString& sequence);
 #if defined(Q_OS_MAC)
-    void emitMacHotkey(int id);
     void* nativeEventHandler_ = nullptr;
 #endif
     QVector<RegisteredHotkey> registered_;
