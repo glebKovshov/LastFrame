@@ -20,4 +20,4 @@ Clips are saved to `Videos/LastFrame` by default. A final file is exposed only a
 
 Capture, audio, clips, and diagnostics stay local. There is no telemetry. Update checks are manual and use the GitHub Releases API only when requested.
 
-The Audio page exposes detected microphones and independent system/microphone volume. The Windows MVP uses FFmpeg `ddagrab` Desktop Duplication with a GDI fallback. WASAPI loopback depends on the supplied FFmpeg build; a microphone fallback is used when available. The full master-clock mixer, Linux/macOS native backends, and direct FFmpeg library integration are planned follow-up slices.
+The Audio page exposes detected microphones and independent system/microphone volume. The Windows path first uses native DXGI Desktop Duplication through a D3D11 staging/raw-BGRA pipe, then FFmpeg `ddagrab`, with GDI as the final fallback. WASAPI loopback depends on the supplied FFmpeg build; a microphone fallback is used when available. The core master-clock mixer is unit-tested, while runtime WASAPI integration, Windows Graphics Capture fallback, Linux/macOS native backends, and direct FFmpeg library integration are planned follow-up slices.

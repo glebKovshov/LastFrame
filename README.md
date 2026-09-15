@@ -58,7 +58,7 @@ Portable Windows ZIP собирается воспроизводимым скр�
 на Apple Silicon (включая M1). В текущем срезе полностью проверен Windows
 portable-путь; native macOS/Linux backends ещё не подключены.
 
-Desktop Duplication уже включён через изолированный FFmpeg media backend `ddagrab`; при ошибке API автоматически используется `gdigrab`. Микрофонный DirectShow path и управление громкостью уже работают, а полноценный WASAPI loopback + master-clock AudioMixer, прямой C++ DXGI/WGC backend и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
+Native Windows DXGI Desktop Duplication уже подключён через D3D11 staging/raw-BGRA pipe; при недоступности native backend автоматически используются FFmpeg `ddagrab`, затем `gdigrab`. Микрофонный DirectShow path и управление громкостью уже работают, а полноценный WASAPI loopback + runtime master-clock mixer, Windows Graphics Capture fallback, прямые FFmpeg libraries и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
 
 ## Публикация
 

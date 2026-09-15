@@ -29,6 +29,6 @@
 
 ## Аудио и ограничения MVP
 
-На странице Audio можно выбрать найденный микрофон и отдельно настроить громкость system/mic. Windows portable backend использует Desktop Duplication через FFmpeg `ddagrab`, а при недоступности API — GDI fallback. Системный звук подключается только если используемая сборка FFmpeg содержит WASAPI; иначе LastFrame продолжит с микрофоном, если он доступен, либо с видео. Полный master-clock mixer, Linux/macOS native capture и прямые FFmpeg libraries входят в последующие срезы.
+На странице Audio можно выбрать найденный микрофон и отдельно настроить громкость system/mic. Windows backend сначала использует native DXGI Desktop Duplication через D3D11, затем FFmpeg `ddagrab`, а при недоступности API — GDI fallback. Системный звук подключается только если используемая сборка FFmpeg содержит WASAPI; иначе LastFrame продолжит с микрофоном, если он доступен, либо с видео. Core master-clock mixer уже покрыт unit-тестами, но его runtime-подключение к WASAPI, Windows Graphics Capture fallback, Linux/macOS native capture и прямые FFmpeg libraries входят в последующие срезы.
 
 Проверка обновлений запускается только вручную на странице Advanced и обращается к GitHub Releases. Телеметрия отсутствует.

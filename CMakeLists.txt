@@ -99,7 +99,11 @@ if(LASTFRAME_BUILD_UI)
         target_compile_definitions(LastFrame PRIVATE LASTFRAME_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
         if(WIN32)
-            target_link_libraries(LastFrame PRIVATE user32 shell32 ole32)
+            target_sources(LastFrame PRIVATE
+                src/platform/WindowsDesktopCapture.cpp
+                src/platform/WindowsDesktopCapture.h
+            )
+            target_link_libraries(LastFrame PRIVATE user32 shell32 ole32 d3d11 dxgi gdi32)
         endif()
 
         set_target_properties(LastFrame PROPERTIES
@@ -122,6 +126,13 @@ if(LASTFRAME_BUILD_UI)
                 Qt6::Network
                 Qt6::Widgets
             )
+            if(WIN32)
+                target_sources(lastframe_recorder_smoke PRIVATE
+                    src/platform/WindowsDesktopCapture.cpp
+                    src/platform/WindowsDesktopCapture.h
+                )
+                target_link_libraries(lastframe_recorder_smoke PRIVATE d3d11 dxgi gdi32 user32)
+            endif()
             # This test captures the real desktop and is intentionally kept
             # as a manual target, not registered in CTest/CI.
 

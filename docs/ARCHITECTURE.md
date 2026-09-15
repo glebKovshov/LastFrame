@@ -10,9 +10,11 @@ GlobalHotkeyManager / MainWindow / SystemTray
        |       |       |
        |       |       +--> bounded export queue
        |       +----------> FFmpeg mux/export + atomic rename
-       +------------------> FFmpeg capture process
+       +------------------> native DXGI capture -> raw BGRA pipe
+                              portable FFmpeg fallback
                               |
-             Desktop Duplication ddagrab -> hwdownload -> scale -> encoder
+             Desktop Duplication -> D3D11 staging -> crop/cursor -> scale -> encoder
+             FFmpeg ddagrab -> hwdownload -> scale -> encoder
              GDI gdigrab fallback
              WASAPI loopback when available
              DirectShow microphone fallback
@@ -41,7 +43,8 @@ mixed samples before a native audio backend hands them to the media layer.
 - Save snapshots only closed segments, then exports to `*.tmp` and atomically
   renames the final file. Existing user clips are never removed by recovery.
 - Audio startup is progressive: system loopback, microphone, then video-only.
-- Capture startup is progressive: Desktop Duplication, then GDI.
+- Capture startup is progressive: native DXGI Desktop Duplication, portable
+  FFmpeg Desktop Duplication, then GDI.
 - Auto/NVENC encoding is progressive: hardware H.264, then software H.264.
 - Monitor changes stop the active session; FPS is not silently changed.
 - Logs contain lifecycle/error text and capability metadata only; no pixels,
@@ -53,6 +56,6 @@ mixed samples before a native audio backend hands them to the media layer.
 production slice can replace its process adapter with an `ICaptureBackend`,
 `IAudioBackend`, and `IMediaEncoder` implementation without changing the
 settings schema, hotkey manager, tray actions, or core tests. The reusable
-AudioMixer is now in the core; Windows native DXGI/WGC, full WASAPI runtime
-integration, Linux PipeWire/portal and macOS ScreenCaptureKit remain outside
-the validated Windows MVP.
+AudioMixer and native DXGI capture are now in the Windows path; Windows WGC,
+full WASAPI runtime integration, Linux PipeWire/portal and macOS
+ScreenCaptureKit remain outside the validated Windows MVP.

@@ -7,6 +7,11 @@
 - Added export queue limits, unique reservations for concurrent clips and stale-temp cleanup.
 - Added smoke coverage for region capture, audio fallback, concurrent saves and MP4/MKV/WebM.
 - Added Desktop Duplication capture through FFmpeg `ddagrab` with automatic GDI fallback.
+- Added native Windows DXGI Desktop Duplication through D3D11 staging and a
+  constant-FPS raw-BGRA pipe, including cursor overlay and automatic fallback
+  to the portable FFmpeg capture path.
+- Added the Qt-free master-clock AudioMixer primitive with silence fill,
+  independent gain/mute, resampling, clipping and unit coverage.
 - Added manual GitHub Releases update check, editable global hotkeys and monitor-change watcher.
 - Added microphone device discovery through DirectShow, system/microphone volume controls and audio fallback chain.
 - Added automatic NVENC to software H.264 encoder fallback.

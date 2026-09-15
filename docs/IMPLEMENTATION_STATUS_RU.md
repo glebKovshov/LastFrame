@@ -23,6 +23,10 @@
   encoder preset/bitrate и лимит размера файла.
 - Ограниченная очередь export jobs и резервирование имён при параллельных сохранениях.
 - Desktop Duplication через FFmpeg `ddagrab` с `hwdownload`/GPU desktop path и автоматическим GDI fallback.
+- Native Windows DXGI Desktop Duplication backend: захват BGRA через D3D11 staging
+  texture, crop выбранного монитора/региона, cursor overlay, постоянный FPS на
+  статичном рабочем столе и raw-video pipe в FFmpeg; при ошибке возвращается к
+  portable FFmpeg backend.
 - Поиск аудиоустройств через FFmpeg: системный WASAPI output и микрофоны DirectShow,
   выбор устройства, независимая громкость и fallback system → microphone → video.
 - Encoder fallback: при ошибке Auto/NVENC повторяется запуск с software H.264.
@@ -41,9 +45,8 @@
 
 ## Следующие обязательные срезы по ТЗ
 
-1. Прямой C++ Windows capture backend: DXGI Desktop Duplication, затем Windows
-   Graphics Capture fallback; текущий portable backend уже использует FFmpeg
-   `ddagrab` (DXGI Desktop Duplication) и GDI fallback.
+1. Windows Graphics Capture fallback для native backend, а также проверка HDR/DRM
+   сценариев и явные capability/error states для недоступных поверхностей.
 2. Полный WASAPI loopback + microphone capture поверх `AudioMixer`, включая
    runtime audio client, device-loss recovery и передачу mixed PCM в encoder.
 3. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
@@ -51,4 +54,5 @@
 5. Интеграционные тесты на RTX 3070 и матрица Windows/Linux/macOS arm64.
 
 До реализации этих срезов UI честно показывает, что segment recorder требует
-доступный FFmpeg и что native capture capability ещё не включена.
+доступный FFmpeg; native DXGI capability включается автоматически на Windows,
+а при недоступности остаётся portable FFmpeg fallback.

@@ -3,6 +3,9 @@
 #include "core/FilenameAllocator.h"
 #include "platform/AudioDeviceEnumerator.h"
 #include "platform/MonitorEnumerator.h"
+#if defined(Q_OS_WIN)
+#include "platform/WindowsDesktopCapture.h"
+#endif
 
 #include <QCoreApplication>
 #include <QDir>
@@ -19,6 +22,31 @@
 namespace LastFrame::Media {
 
 PortableSegmentRecorder::PortableSegmentRecorder(QObject* parent) : QObject(parent) {
+#if defined(Q_OS_WIN)
+    nativeCapture_ = std::make_unique<Platform::WindowsDesktopCapture>(this);
+    connect(nativeCapture_.get(), &Platform::WindowsDesktopCapture::failed, this, [this](const QString& reason) {
+        if (!recording_ || !useNativeCapture_) {
+            return;
+        }
+        attemptedNativeCaptureFallback_ = true;
+        useNativeCapture_ = false;
+        nativeCapture_->stop();
+        emit message(QStringLiteral("[capture_failed] Нативный DXGI-захват недоступен; возвращаюсь к FFmpeg backend: %1")
+                         .arg(reason));
+        if (captureProcess_ != nullptr) {
+            QProcess* process = captureProcess_;
+            process->disconnect(this);
+            process->terminate();
+            if (!process->waitForFinished(1000)) {
+                process->kill();
+                process->waitForFinished(1000);
+            }
+            process->deleteLater();
+            captureProcess_ = nullptr;
+        }
+        startProcess(processHasAudio_, false);
+    });
+#endif
     segmentTimer_.setInterval(500);
     connect(&segmentTimer_, &QTimer::timeout, this, &PortableSegmentRecorder::reapSegments);
 }
@@ -67,6 +95,11 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
     discoverMicrophoneDevice();
     useDesktopDuplication_ = true;
     attemptedDesktopDuplicationFallback_ = false;
+    useNativeCapture_ = false;
+    attemptedNativeCaptureFallback_ = false;
+#if defined(Q_OS_WIN)
+    useNativeCapture_ = prepareNativeCapture();
+#endif
     useSoftwareEncoder_ = false;
     attemptedEncoderFallback_ = false;
     paused_ = false;
@@ -79,6 +112,11 @@ void PortableSegmentRecorder::pause() {
     }
     recording_ = false;
     if (captureProcess_ != nullptr) {
+#if defined(Q_OS_WIN)
+        if (useNativeCapture_) {
+            nativeCapture_->stop();
+        }
+#endif
         captureProcess_->terminate();
         if (!captureProcess_->waitForFinished(1500)) {
             captureProcess_->kill();
@@ -99,6 +137,9 @@ void PortableSegmentRecorder::resume() {
     attemptedVideoOnlyFallback_ = false;
     captureSystemAudio_ = settings_.audio.systemEnabled;
     discoverMicrophoneDevice();
+#if defined(Q_OS_WIN)
+    useNativeCapture_ = !attemptedNativeCaptureFallback_ && prepareNativeCapture();
+#endif
     startProcess(true);
     emit pausedChanged(false);
 }
@@ -106,6 +147,11 @@ void PortableSegmentRecorder::resume() {
 void PortableSegmentRecorder::stop() {
     const bool wasActive = recording_ || paused_;
     recording_ = false;
+#if defined(Q_OS_WIN)
+    if (nativeCapture_ != nullptr) {
+        nativeCapture_->stop();
+    }
+#endif
     if (captureProcess_ != nullptr) {
         // waitForFinished() pumps the event loop; disconnect first so the
         // finished callback cannot clear captureProcess_ mid-cleanup.
@@ -254,6 +300,11 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
     Q_UNUSED(status)
     const QString processOutput = captureProcess_ == nullptr ? QString() : QString::fromLocal8Bit(captureProcess_->readAll());
     if (recording_ && exitCode != 0 && processHasAudio_ && !attemptedVideoOnlyFallback_) {
+#if defined(Q_OS_WIN)
+        if (useNativeCapture_) {
+            nativeCapture_->stop();
+        }
+#endif
         if (captureSystemAudio_) {
             captureSystemAudio_ = false;
             emit message(QStringLiteral("[audio_device_lost] Системный звук недоступен; продолжаю с доступным микрофоном или видео. %1")
@@ -287,6 +338,11 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
         emit error(QStringLiteral("[capture_failed] Захват завершился с ошибкой: %1").arg(processOutput.left(300)));
     }
     recording_ = false;
+#if defined(Q_OS_WIN)
+    if (nativeCapture_ != nullptr) {
+        nativeCapture_->stop();
+    }
+#endif
     segmentTimer_.stop();
     if (captureProcess_ != nullptr) {
         captureProcess_->deleteLater();
@@ -336,6 +392,16 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
     const int localOffsetY = captureRect.y() - monitor.geometry.y();
     QStringList args{QStringLiteral("-hide_banner"), QStringLiteral("-loglevel"), QStringLiteral("warning"),
                      QStringLiteral("-y")};
+#if defined(Q_OS_WIN)
+    if (useNativeCapture_) {
+        const QSize nativeFrameSize = nativeCapture_->frameSize();
+        args << QStringLiteral("-f") << QStringLiteral("rawvideo") << QStringLiteral("-pixel_format")
+             << QStringLiteral("bgra") << QStringLiteral("-video_size")
+             << QStringLiteral("%1x%2").arg(nativeFrameSize.width()).arg(nativeFrameSize.height())
+             << QStringLiteral("-framerate") << QString::number(fps) << QStringLiteral("-i")
+             << nativeCapture_->inputPath();
+    } else
+#endif
     if (useDesktopDuplication_) {
         const QString filter = QStringLiteral("ddagrab=output_idx=%1:draw_mouse=%2:framerate=%3:video_size=%4x%5:offset_x=%6:offset_y=%7:output_fmt=bgra")
                                    .arg(std::max(0, monitorIndex))
@@ -398,7 +464,7 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
                         : preset == QStringLiteral("medium") ? 10000
                         : preset == QStringLiteral("ultra")  ? 24000
                         : settings_.video.customBitrateKbps;
-    const QString videoFilter = useDesktopDuplication_
+    const QString videoFilter = useDesktopDuplication_ && !useNativeCapture_
                                     ? QStringLiteral("hwdownload,format=bgra,scale=%1:%2:flags=lanczos")
                                     : QStringLiteral("scale=%1:%2:flags=lanczos");
     args << QStringLiteral("-vf") << videoFilter.arg(outputWidth).arg(outputHeight)
@@ -497,6 +563,47 @@ QString PortableSegmentRecorder::selectedMonitorLabel() const {
     return monitors.value(std::max(0, index)).name;
 }
 
+bool PortableSegmentRecorder::prepareNativeCapture() {
+#if defined(Q_OS_WIN)
+    if (nativeCapture_ == nullptr) {
+        return false;
+    }
+    const auto monitors = Platform::MonitorEnumerator::enumerate();
+    const int monitorIndex = Platform::MonitorEnumerator::indexForId(
+        monitors, QString::fromStdString(settings_.capture.monitorId));
+    if (monitorIndex < 0 || monitorIndex >= monitors.size()) {
+        return false;
+    }
+    const Platform::MonitorInfo monitor = monitors.at(monitorIndex);
+    QRect captureRect = monitor.geometry;
+    if (settings_.capture.source == "custom_region" && settings_.capture.regionWidth > 3 &&
+        settings_.capture.regionHeight > 3) {
+        const QRect localRegion(settings_.capture.regionX, settings_.capture.regionY,
+                                settings_.capture.regionWidth, settings_.capture.regionHeight);
+        const QRect monitorLocal(QPoint(0, 0), monitor.geometry.size());
+        const QRect boundedRegion = localRegion.intersected(monitorLocal);
+        if (boundedRegion.width() > 3 && boundedRegion.height() > 3) {
+            captureRect = QRect(monitor.geometry.topLeft() + boundedRegion.topLeft(), boundedRegion.size());
+        }
+    }
+    Platform::WindowsDesktopCapture::Config config;
+    config.outputIndex = monitorIndex;
+    config.monitorGeometry = monitor.geometry;
+    config.captureGeometry = captureRect;
+    config.fps = std::clamp(settings_.capture.fps, 15, std::max(15, monitor.refreshRate));
+    config.showCursor = settings_.capture.showCursor;
+    QString errorText;
+    if (!nativeCapture_->prepare(config, &errorText)) {
+        emit message(QStringLiteral("Нативный DXGI backend недоступен, использую FFmpeg backend: %1")
+                         .arg(errorText));
+        return false;
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
 void PortableSegmentRecorder::discoverMicrophoneDevice() {
     microphoneDeviceName_.clear();
     if (!settings_.audio.microphoneEnabled) {
@@ -518,6 +625,17 @@ void PortableSegmentRecorder::discoverMicrophoneDevice() {
 }
 
 void PortableSegmentRecorder::startProcess(const bool withAudio, const bool announceStarted) {
+#if defined(Q_OS_WIN)
+    if (captureProcess_ != nullptr && useNativeCapture_) {
+        nativeCapture_->stop();
+    }
+    if (useNativeCapture_ && !nativeCapture_->isPrepared()) {
+        if (!prepareNativeCapture()) {
+            useNativeCapture_ = false;
+            attemptedNativeCaptureFallback_ = true;
+        }
+    }
+#endif
     if (captureProcess_ != nullptr) {
         captureProcess_->disconnect(this);
         captureProcess_->terminate();
@@ -530,6 +648,18 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
     connect(captureProcess_, &QProcess::errorOccurred, this, &PortableSegmentRecorder::processError);
     captureProcess_->start(ffmpegPath_, captureArguments(withAudio));
     if (!captureProcess_->waitForStarted(3000)) {
+#if defined(Q_OS_WIN)
+        if (useNativeCapture_) {
+            nativeCapture_->stop();
+            useNativeCapture_ = false;
+            attemptedNativeCaptureFallback_ = true;
+            emit message(QStringLiteral("Нативный DXGI backend не запустился; использую FFmpeg capture backend."));
+            captureProcess_->deleteLater();
+            captureProcess_ = nullptr;
+            startProcess(withAudio, announceStarted);
+            return;
+        }
+#endif
         const bool canFallbackToGdi = useDesktopDuplication_ && !attemptedDesktopDuplicationFallback_;
         emit error(QStringLiteral("[capture_failed] FFmpeg не запустился для монитора %1.").arg(selectedMonitorLabel()));
         captureProcess_->deleteLater();
@@ -554,6 +684,20 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
         recording_ = false;
         return;
     }
+#if defined(Q_OS_WIN)
+    if (useNativeCapture_ && !nativeCapture_->start()) {
+        nativeCapture_->stop();
+        useNativeCapture_ = false;
+        attemptedNativeCaptureFallback_ = true;
+        emit message(QStringLiteral("Нативный DXGI backend не запустился; использую FFmpeg capture backend."));
+        captureProcess_->terminate();
+        captureProcess_->waitForFinished(1000);
+        captureProcess_->deleteLater();
+        captureProcess_ = nullptr;
+        startProcess(withAudio, announceStarted);
+        return;
+    }
+#endif
     recording_ = true;
     paused_ = false;
     segmentTimer_.start();
