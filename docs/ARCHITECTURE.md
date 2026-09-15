@@ -28,6 +28,12 @@ the FFmpeg process, segment directory and export jobs. The core library stays
 Qt-free and contains the state machine, bounded queues, ring descriptors,
 filename allocation, rate limiting and JSON settings model.
 
+The core also contains a format-independent `AudioMixer` primitive. It accepts
+timestamped PCM blocks from system and microphone sources, renders fixed-size
+blocks on a shared master clock, fills missing sources with silence, applies
+independent gain/mute state, resamples to the configured rate, and clamps the
+mixed samples before a native audio backend hands them to the media layer.
+
 ## Data and failure boundaries
 
 - Capture writes short immutable Matroska segments into the configured local
@@ -46,6 +52,7 @@ filename allocation, rate limiting and JSON settings model.
 `PortableSegmentRecorder` is intentionally an adapter boundary. The next
 production slice can replace its process adapter with an `ICaptureBackend`,
 `IAudioBackend`, and `IMediaEncoder` implementation without changing the
-settings schema, hotkey manager, tray actions, or core tests. Windows native
-DXGI/WGC, full WASAPI master-clock mixing, Linux PipeWire/portal and macOS
-ScreenCaptureKit remain outside the validated Windows MVP.
+settings schema, hotkey manager, tray actions, or core tests. The reusable
+AudioMixer is now in the core; Windows native DXGI/WGC, full WASAPI runtime
+integration, Linux PipeWire/portal and macOS ScreenCaptureKit remain outside
+the validated Windows MVP.

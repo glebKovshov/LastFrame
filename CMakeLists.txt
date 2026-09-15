@@ -30,6 +30,7 @@ endif()
 
 add_library(lastframe_core STATIC
     src/core/AppState.cpp
+    src/core/AudioMixer.cpp
     src/core/BoundedQueue.cpp
     src/core/FilenameAllocator.cpp
     src/core/RateLimiter.cpp

@@ -32,6 +32,9 @@
 - Ручная проверка GitHub Releases через `api.github.com`, без фоновой телеметрии или автообновления.
 - Асинхронный FFmpeg capability probe в Advanced: Desktop Duplication/GDI,
   audio devices и доступные encoder profiles отображаются до запуска буфера.
+- Qt-free `AudioMixer` core primitive: общий master clock, silence-fill,
+  независимые уровни, mute transitions, resampling и clipping; покрыт unit-тестами
+  и готов для подключения к native audio backends.
 - Редактор глобальных хоткеев с проверкой дубликатов и откатом при конфликте регистрации.
 - Наблюдатель мониторов с интервалом 500 ms: активный буфер безопасно останавливается при изменении дисплея.
 - GitHub Actions для core tests и Windows portable artifact.
@@ -41,8 +44,8 @@
 1. Прямой C++ Windows capture backend: DXGI Desktop Duplication, затем Windows
    Graphics Capture fallback; текущий portable backend уже использует FFmpeg
    `ddagrab` (DXGI Desktop Duplication) и GDI fallback.
-2. Полный WASAPI loopback + microphone capture, master clock и AudioMixer
-   поверх текущего device/fallback слоя.
+2. Полный WASAPI loopback + microphone capture поверх `AudioMixer`, включая
+   runtime audio client, device-loss recovery и передачу mixed PCM в encoder.
 3. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
 4. Region selector, DPI-aware coordinates, monitor watcher и overlay.
 5. Интеграционные тесты на RTX 3070 и матрица Windows/Linux/macOS arm64.

@@ -1,4 +1,5 @@
 #include "core/AppState.h"
+#include "core/AudioMixer.h"
 #include "core/BoundedQueue.h"
 #include "core/FilenameAllocator.h"
 #include "core/RateLimiter.h"
@@ -6,6 +7,7 @@
 #include "core/SettingsStore.h"
 
 #include <cassert>
+#include <cmath>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -50,6 +52,57 @@ void testRateLimiter() {
     assert(limiter.tryAccept(start + 30ms) == RateLimitResult::Cooldown);
     assert(limiter.tryAccept(start + 4s) == RateLimitResult::Cooldown);
     assert(limiter.tryAccept(start + 5s + 31ms) == RateLimitResult::Accepted);
+}
+
+AudioBlock pcm(const Timestamp startPts, const int sampleRate, const int channels,
+               std::initializer_list<float> samples) {
+    AudioBlock block;
+    block.startPts = startPts;
+    block.sampleRate = sampleRate;
+    block.channels = channels;
+    block.samples = samples;
+    return block;
+}
+
+void testAudioMixerSilenceAndClipping() {
+    AudioMixer mixer(8'000, 2, 8);
+    mixer.setVolumes(1.0, 0.5);
+    mixer.pushSystem(pcm(0, 8'000, 1, {0.8F, 0.8F, 0.8F, 0.8F, 0.8F, 0.8F, 0.8F, 0.8F}));
+    mixer.pushMicrophone(pcm(0, 8'000, 2, {0.8F, -0.8F, 0.8F, -0.8F, 0.8F, -0.8F, 0.8F, -0.8F,
+                                             0.8F, -0.8F, 0.8F, -0.8F, 0.8F, -0.8F, 0.8F, -0.8F}));
+
+    const auto blocks = mixer.drainUntil(1'000);
+    assert(blocks.size() == 1);
+    assert(blocks.front().frameCount() == 8);
+    assert(std::abs(blocks.front().samples[0] - 1.0F) < 0.0001F);
+    assert(std::abs(blocks.front().samples[1] - 0.4F) < 0.0001F);
+
+    mixer.setMicrophoneMuted(true);
+    mixer.pushSystem(pcm(1'000, 8'000, 1, {0.25F, 0.25F, 0.25F, 0.25F, 0.25F, 0.25F, 0.25F, 0.25F}));
+    const auto muted = mixer.drainUntil(2'000);
+    assert(muted.size() == 1);
+    assert(std::abs(muted.front().samples[0] - 0.25F) < 0.0001F);
+    assert(std::abs(muted.front().samples[1] - 0.25F) < 0.0001F);
+}
+
+void testAudioMixerResampleAndSilenceFill() {
+    AudioMixer mixer(16'000, 2, 16);
+    mixer.setMicrophoneEnabled(false);
+    mixer.pushSystem(pcm(0, 8'000, 1, {0.0F, 1.0F, 0.0F, 1.0F, 0.0F, 1.0F, 0.0F, 1.0F}));
+    const auto blocks = mixer.drainUntil(1'000);
+    assert(blocks.size() == 1);
+    assert(blocks.front().samples[0] >= 0.0F && blocks.front().samples[0] <= 1.0F);
+    assert(blocks.front().samples[2] >= 0.0F && blocks.front().samples[2] <= 1.0F);
+
+    mixer.reset();
+    mixer.pushSystem(pcm(2'000, 16'000, 2, {0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F,
+                                            0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F,
+                                            0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F,
+                                            0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F}));
+    const auto padded = mixer.flush();
+    assert(padded.size() == 1);
+    assert(padded.front().startPts == 2'000);
+    assert(std::abs(padded.front().samples[0] - 0.5F) < 0.0001F);
 }
 
 void testStateMachine() {
@@ -144,6 +197,8 @@ void testSettings() {
 int main() {
     testRingBuffer();
     testRateLimiter();
+    testAudioMixerSilenceAndClipping();
+    testAudioMixerResampleAndSilenceFill();
     testStateMachine();
     testQueue();
     testFilenameAllocator();
