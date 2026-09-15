@@ -764,6 +764,12 @@ void PortableSegmentRecorder::promoteClosedSegmentsToRam() {
     for (int index = files.size() - 2; index >= 0; --index) {
         const QString& path = files.at(index);
         if (ramSegments_.contains(path)) {
+            // A RAM segment may have been materialized temporarily for an
+            // export. Once all exports are done, remove that duplicate and
+            // return to the hybrid retention layout.
+            if (QFileInfo::exists(path)) {
+                QFile::remove(path);
+            }
             continue;
         }
         QFile file(path);
