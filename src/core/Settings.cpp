@@ -1,0 +1,196 @@
+#include "core/Settings.h"
+
+#include <algorithm>
+#include <initializer_list>
+
+namespace LastFrame::Core {
+namespace {
+
+template <typename T>
+T readValue(const nlohmann::json& object, const char* key, const T& fallback) {
+    if (!object.is_object() || !object.contains(key)) {
+        return fallback;
+    }
+    try {
+        return object.at(key).get<T>();
+    } catch (...) {
+        return fallback;
+    }
+}
+
+std::filesystem::path pathFromJson(const nlohmann::json& object, const char* key) {
+    return std::filesystem::path(readValue<std::string>(object, key, {}));
+}
+
+nlohmann::json sectionExtras(const nlohmann::json& object,
+                             std::initializer_list<const char*> knownKeys) {
+    nlohmann::json extras = nlohmann::json::object();
+    if (!object.is_object()) {
+        return extras;
+    }
+    for (const auto& [key, value] : object.items()) {
+        if (std::find(knownKeys.begin(), knownKeys.end(), key) == knownKeys.end()) {
+            extras[key] = value;
+        }
+    }
+    return extras;
+}
+
+} // namespace
+
+Settings Settings::defaults() {
+    Settings settings;
+    settings.storage.clipsDirectory = std::filesystem::path();
+    return settings;
+}
+
+nlohmann::json Settings::toJson() const {
+    nlohmann::json result = extras.is_object() ? extras : nlohmann::json::object();
+    result["schemaVersion"] = schemaVersion;
+    result["language"] = language;
+
+    result["buffer"] = buffer.extras;
+    result["buffer"].update({
+        {"durationSeconds", buffer.durationSeconds},
+        {"ramLimitMiB", buffer.ramLimitMiB},
+        {"temporaryDirectory", buffer.temporaryDirectory.generic_string()},
+        {"autoStart", buffer.autoStart},
+    });
+
+    result["capture"] = capture.extras;
+    result["capture"].update({
+        {"monitorId", capture.monitorId},
+        {"source", capture.source},
+        {"region", {{"x", capture.regionX}, {"y", capture.regionY},
+                     {"width", capture.regionWidth}, {"height", capture.regionHeight}}},
+        {"outputWidth", capture.outputWidth},
+        {"outputHeight", capture.outputHeight},
+        {"fps", capture.fps},
+        {"showCursor", capture.showCursor},
+        {"autoResume", capture.autoResume},
+    });
+
+    result["video"] = video.extras;
+    result["video"].update({
+        {"container", video.container},
+        {"codec", video.codec},
+        {"preset", video.preset},
+        {"customBitrateKbps", video.customBitrateKbps},
+        {"maxFileSizeMiB", video.maxFileSizeMiB},
+    });
+
+    result["audio"] = audio.extras;
+    result["audio"].update({
+        {"systemEnabled", audio.systemEnabled},
+        {"systemDeviceId", audio.systemDeviceId},
+        {"microphoneEnabled", audio.microphoneEnabled},
+        {"microphoneDeviceId", audio.microphoneDeviceId},
+        {"systemVolume", audio.systemVolume},
+        {"microphoneVolume", audio.microphoneVolume},
+        {"sampleRate", audio.sampleRate},
+    });
+
+    result["hotkeys"] = hotkeys.extras;
+    result["hotkeys"].update({
+        {"save", hotkeys.save}, {"clear", hotkeys.clear}, {"pause", hotkeys.pause},
+        {"toggleCapture", hotkeys.toggleCapture}, {"muteMicrophone", hotkeys.muteMicrophone},
+    });
+
+    result["storage"] = storage.extras;
+    result["storage"].update({
+        {"clipsDirectory", storage.clipsDirectory.generic_string()},
+        {"maxQueueLength", storage.maxQueueLength},
+    });
+
+    result["notifications"] = notifications.extras;
+    result["notifications"].update({
+        {"enabled", notifications.enabled}, {"overlayEnabled", notifications.overlayEnabled},
+    });
+
+    result["privacy"] = privacy.extras;
+    result["privacy"].update({
+        {"updateCheckEnabled", privacy.updateCheckEnabled},
+        {"telemetryEnabled", privacy.telemetryEnabled},
+    });
+    return result;
+}
+
+Settings Settings::fromJson(const nlohmann::json& json) {
+    Settings settings = defaults();
+    if (!json.is_object()) {
+        return settings;
+    }
+
+    settings.schemaVersion = readValue(json, "schemaVersion", 1);
+    settings.language = readValue(json, "language", settings.language);
+    settings.extras = sectionExtras(json, {"schemaVersion", "language", "buffer", "capture", "video",
+                                           "audio", "hotkeys", "storage", "notifications", "privacy"});
+
+    const auto buffer = json.value("buffer", nlohmann::json::object());
+    settings.buffer.durationSeconds = readValue(buffer, "durationSeconds", settings.buffer.durationSeconds);
+    settings.buffer.ramLimitMiB = readValue(buffer, "ramLimitMiB", settings.buffer.ramLimitMiB);
+    settings.buffer.temporaryDirectory = pathFromJson(buffer, "temporaryDirectory");
+    settings.buffer.autoStart = readValue(buffer, "autoStart", settings.buffer.autoStart);
+    settings.buffer.extras = sectionExtras(buffer, {"durationSeconds", "ramLimitMiB", "temporaryDirectory", "autoStart"});
+
+    const auto capture = json.value("capture", nlohmann::json::object());
+    settings.capture.monitorId = readValue(capture, "monitorId", settings.capture.monitorId);
+    settings.capture.source = readValue(capture, "source", settings.capture.source);
+    const auto region = capture.value("region", nlohmann::json::object());
+    settings.capture.regionX = readValue(region, "x", settings.capture.regionX);
+    settings.capture.regionY = readValue(region, "y", settings.capture.regionY);
+    settings.capture.regionWidth = readValue(region, "width", settings.capture.regionWidth);
+    settings.capture.regionHeight = readValue(region, "height", settings.capture.regionHeight);
+    settings.capture.outputWidth = readValue(capture, "outputWidth", settings.capture.outputWidth);
+    settings.capture.outputHeight = readValue(capture, "outputHeight", settings.capture.outputHeight);
+    settings.capture.fps = readValue(capture, "fps", settings.capture.fps);
+    settings.capture.showCursor = readValue(capture, "showCursor", settings.capture.showCursor);
+    settings.capture.autoResume = readValue(capture, "autoResume", settings.capture.autoResume);
+    settings.capture.extras = sectionExtras(capture, {"monitorId", "source", "region", "outputWidth", "outputHeight",
+                                                      "fps", "showCursor", "autoResume"});
+
+    const auto video = json.value("video", nlohmann::json::object());
+    settings.video.container = readValue(video, "container", settings.video.container);
+    settings.video.codec = readValue(video, "codec", settings.video.codec);
+    settings.video.preset = readValue(video, "preset", settings.video.preset);
+    settings.video.customBitrateKbps = readValue(video, "customBitrateKbps", settings.video.customBitrateKbps);
+    settings.video.maxFileSizeMiB = readValue(video, "maxFileSizeMiB", settings.video.maxFileSizeMiB);
+    settings.video.extras = sectionExtras(video, {"container", "codec", "preset", "customBitrateKbps", "maxFileSizeMiB"});
+
+    const auto audio = json.value("audio", nlohmann::json::object());
+    settings.audio.systemEnabled = readValue(audio, "systemEnabled", settings.audio.systemEnabled);
+    settings.audio.systemDeviceId = readValue(audio, "systemDeviceId", settings.audio.systemDeviceId);
+    settings.audio.microphoneEnabled = readValue(audio, "microphoneEnabled", settings.audio.microphoneEnabled);
+    settings.audio.microphoneDeviceId = readValue(audio, "microphoneDeviceId", settings.audio.microphoneDeviceId);
+    settings.audio.systemVolume = std::clamp(readValue(audio, "systemVolume", settings.audio.systemVolume), 0.0, 2.0);
+    settings.audio.microphoneVolume = std::clamp(readValue(audio, "microphoneVolume", settings.audio.microphoneVolume), 0.0, 2.0);
+    settings.audio.sampleRate = readValue(audio, "sampleRate", settings.audio.sampleRate);
+    settings.audio.extras = sectionExtras(audio, {"systemEnabled", "systemDeviceId", "microphoneEnabled", "microphoneDeviceId",
+                                                  "systemVolume", "microphoneVolume", "sampleRate"});
+
+    const auto hotkeys = json.value("hotkeys", nlohmann::json::object());
+    settings.hotkeys.save = readValue(hotkeys, "save", settings.hotkeys.save);
+    settings.hotkeys.clear = readValue(hotkeys, "clear", settings.hotkeys.clear);
+    settings.hotkeys.pause = readValue(hotkeys, "pause", settings.hotkeys.pause);
+    settings.hotkeys.toggleCapture = readValue(hotkeys, "toggleCapture", settings.hotkeys.toggleCapture);
+    settings.hotkeys.muteMicrophone = readValue(hotkeys, "muteMicrophone", settings.hotkeys.muteMicrophone);
+    settings.hotkeys.extras = sectionExtras(hotkeys, {"save", "clear", "pause", "toggleCapture", "muteMicrophone"});
+
+    const auto storage = json.value("storage", nlohmann::json::object());
+    settings.storage.clipsDirectory = pathFromJson(storage, "clipsDirectory");
+    settings.storage.maxQueueLength = std::clamp(readValue(storage, "maxQueueLength", settings.storage.maxQueueLength), 1, 32);
+    settings.storage.extras = sectionExtras(storage, {"clipsDirectory", "maxQueueLength"});
+
+    const auto notifications = json.value("notifications", nlohmann::json::object());
+    settings.notifications.enabled = readValue(notifications, "enabled", settings.notifications.enabled);
+    settings.notifications.overlayEnabled = readValue(notifications, "overlayEnabled", settings.notifications.overlayEnabled);
+    settings.notifications.extras = sectionExtras(notifications, {"enabled", "overlayEnabled"});
+
+    const auto privacy = json.value("privacy", nlohmann::json::object());
+    settings.privacy.updateCheckEnabled = readValue(privacy, "updateCheckEnabled", settings.privacy.updateCheckEnabled);
+    settings.privacy.telemetryEnabled = readValue(privacy, "telemetryEnabled", settings.privacy.telemetryEnabled);
+    settings.privacy.extras = sectionExtras(privacy, {"updateCheckEnabled", "telemetryEnabled"});
+    return settings;
+}
+
+} // namespace LastFrame::Core

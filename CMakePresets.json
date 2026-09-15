@@ -1,0 +1,53 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-debug",
+      "displayName": "Windows Debug",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/windows",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "cl",
+        "LASTFRAME_BUILD_UI": "ON",
+        "LASTFRAME_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "core-only",
+      "displayName": "Portable core tests",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/core",
+      "cacheVariables": {
+        "LASTFRAME_BUILD_UI": "OFF",
+        "LASTFRAME_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "core-only",
+      "configurePreset": "core-only",
+      "configuration": "Debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "core-only",
+      "configurePreset": "core-only",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
