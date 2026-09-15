@@ -75,6 +75,7 @@ jobs:
         run: |
           & cmake --build build/windows --config Release --parallel 2 --verbose 2>&1 | Tee-Object build.log
           if ($LASTEXITCODE -ne 0) {
+            Get-Content build.log -Tail 200 | ForEach-Object { Write-Output ("::error::" + $_) }
             exit $LASTEXITCODE
           }
 
