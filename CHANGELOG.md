@@ -49,6 +49,8 @@
   policy is visible and adjustable instead of silently using a hidden default.
 - Added native DXGI device-loss retries with 250/500/1000 ms backoff before
   switching to Windows Graphics Capture and then portable FFmpeg.
+- Added matching native WASAPI endpoint reattach retries before switching to
+  portable FFmpeg audio; one-source degradation still keeps the other source alive.
 - Added a hardware smoke override (`LASTFRAME_FORCE_WGC=1`) used to validate the
   Windows Graphics Capture path end-to-end on the development machine.
 

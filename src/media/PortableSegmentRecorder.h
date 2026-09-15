@@ -77,6 +77,7 @@ private:
     void discoverMicrophoneDevice();
     [[nodiscard]] bool tryNextAutomaticEncoder();
     void recoverNativeCapture(const QString& reason);
+    void recoverNativeAudio(const QString& reason);
     void startProcess(bool withAudio, bool announceStarted = true);
     void finishExport(ExportJob* job, int exitCode, QProcess::ExitStatus status);
 
@@ -100,6 +101,7 @@ private:
     bool attemptedWindowsGraphicsCaptureFallback_ = false;
     bool useNativeAudio_ = false;
     bool attemptedNativeAudioFallback_ = false;
+    int nativeAudioRecoveryAttempts_ = 0;
     bool microphoneMuted_ = false;
     bool useSoftwareEncoder_ = false;
     bool attemptedEncoderFallback_ = false;

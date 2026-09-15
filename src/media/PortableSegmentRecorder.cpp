@@ -64,26 +64,7 @@ PortableSegmentRecorder::PortableSegmentRecorder(QObject* parent) : QObject(pare
         if (!recording_ || !useNativeAudio_) {
             return;
         }
-        attemptedNativeAudioFallback_ = true;
-        useNativeAudio_ = false;
-        nativeAudio_->stop();
-        if (useNativeCapture_) {
-            nativeCapture_->stop();
-        }
-        emit message(QStringLiteral("[audio_device_lost] Native WASAPI недоступен; возвращаюсь к FFmpeg audio backend: %1")
-                         .arg(reason));
-        if (captureProcess_ != nullptr) {
-            QProcess* process = captureProcess_;
-            process->disconnect(this);
-            process->terminate();
-            if (!process->waitForFinished(1000)) {
-                process->kill();
-                process->waitForFinished(1000);
-            }
-            process->deleteLater();
-            captureProcess_ = nullptr;
-        }
-        startProcess(processHasAudio_, false);
+        recoverNativeAudio(reason);
     });
 #endif
     segmentTimer_.setInterval(500);
@@ -158,6 +139,7 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
     attemptedWindowsGraphicsCaptureFallback_ = false;
     useNativeAudio_ = false;
     attemptedNativeAudioFallback_ = false;
+    nativeAudioRecoveryAttempts_ = 0;
 #if defined(Q_OS_WIN)
     useNativeCapture_ = prepareNativeCapture();
     const bool forceWindowsGraphicsCapture = qEnvironmentVariable("LASTFRAME_FORCE_WGC") == QStringLiteral("1");
@@ -223,6 +205,9 @@ void PortableSegmentRecorder::resume() {
     useWindowsGraphicsCapture_ = !useNativeCapture_ && !attemptedWindowsGraphicsCaptureFallback_ &&
                                  prepareWindowsGraphicsCapture();
     useNativeAudio_ = !attemptedNativeAudioFallback_ && prepareNativeAudio();
+    if (useNativeAudio_) {
+        nativeAudioRecoveryAttempts_ = 0;
+    }
 #endif
     startProcess(true);
     emit pausedChanged(false);
@@ -837,6 +822,59 @@ void PortableSegmentRecorder::recoverNativeCapture(const QString& reason) {
     }
     attemptedWindowsGraphicsCaptureFallback_ = true;
     emit message(QStringLiteral("[capture_failed] Native capture не восстановился; возвращаюсь к FFmpeg backend: %1")
+                     .arg(reason));
+    startProcess(processHasAudio_, false);
+#else
+    Q_UNUSED(reason)
+#endif
+}
+
+void PortableSegmentRecorder::recoverNativeAudio(const QString& reason) {
+#if defined(Q_OS_WIN)
+    if (!recording_) {
+        return;
+    }
+    useNativeAudio_ = false;
+    nativeAudio_->stop();
+    if (useNativeCapture_) {
+        nativeCapture_->stop();
+    }
+    if (useWindowsGraphicsCapture_) {
+        windowsGraphicsCapture_->stop();
+    }
+    if (captureProcess_ != nullptr) {
+        QProcess* process = captureProcess_;
+        process->disconnect(this);
+        process->terminate();
+        if (!process->waitForFinished(1000)) {
+            process->kill();
+            process->waitForFinished(1000);
+        }
+        process->deleteLater();
+        captureProcess_ = nullptr;
+    }
+    if (nativeAudioRecoveryAttempts_ < 3) {
+        const int delays[] = {250, 500, 1000};
+        const int delay = delays[nativeAudioRecoveryAttempts_];
+        ++nativeAudioRecoveryAttempts_;
+        emit message(QStringLiteral("[audio_device_lost] Потеряна native WASAPI-сессия; повтор %1/3 через %2 ms.")
+                         .arg(nativeAudioRecoveryAttempts_)
+                         .arg(delay));
+        QTimer::singleShot(delay, this, [this, reason] {
+            if (!recording_) {
+                return;
+            }
+            if (prepareNativeAudio()) {
+                useNativeAudio_ = true;
+                startProcess(processHasAudio_, false);
+            } else {
+                recoverNativeAudio(reason);
+            }
+        });
+        return;
+    }
+    attemptedNativeAudioFallback_ = true;
+    emit message(QStringLiteral("[audio_device_lost] Native WASAPI не восстановился; возвращаюсь к FFmpeg audio backend: %1")
                      .arg(reason));
     startProcess(processHasAudio_, false);
 #else

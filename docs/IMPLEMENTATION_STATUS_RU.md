@@ -71,6 +71,9 @@
 - При потере native DXGI-сессии выполняются три попытки восстановления с backoff
   250/500/1000 ms, затем применяется WGC/portable fallback; процесс FFmpeg
   безопасно перезапускается без удаления старых клипов.
+- При полной потере native WASAPI endpoint выполняются такие же три reattach-попытки,
+  затем portable FFmpeg audio; потеря только одного источника остаётся degraded
+  состоянием с продолжением второго источника и silence-fill.
 - Страница Notifications с настройками системных уведомлений и click-through
   corner toast overlay с анимированным индикатором; на Windows overlay запрашивает
   `WDA_EXCLUDEFROMCAPTURE`, настройки сохраняются в JSON.
