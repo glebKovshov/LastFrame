@@ -4,6 +4,7 @@
 #include "media/PortableSegmentRecorder.h"
 #include "platform/GlobalHotkeyManager.h"
 #include "platform/MonitorEnumerator.h"
+#include "platform/Diagnostics.h"
 #include "platform/UpdateChecker.h"
 
 #include <QMainWindow>
@@ -44,6 +45,7 @@ private slots:
     void clearBuffer();
     void chooseRegion();
     void checkForUpdates();
+    void copyDiagnostics();
     void refreshMonitors();
     void chooseTheme(int index);
     void handleHotkey(LastFrame::Platform::HotkeyAction action);
@@ -105,10 +107,12 @@ private:
     QCheckBox* systemAudioCheck_ = nullptr;
     QCheckBox* microphoneCheck_ = nullptr;
     QPushButton* updateButton_ = nullptr;
+    QPushButton* diagnosticsButton_ = nullptr;
     QSystemTrayIcon* tray_ = nullptr;
     QTimer monitorTimer_;
     QString monitorSignature_;
     QUrl latestReleaseUrl_;
+    QString lastSavedPath_;
     bool monitorSignatureInitialized_ = false;
     bool forceQuit_ = false;
     bool settingsRecovered_ = false;

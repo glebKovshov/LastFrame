@@ -3,6 +3,7 @@
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDir>
@@ -18,6 +19,8 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QProcess>
+#include <QUrl>
 #include <QSet>
 #include <QSlider>
 #include <QSpinBox>
@@ -469,11 +472,14 @@ QWidget* MainWindow::buildAdvancedPage() {
     layout->addWidget(ffmpegLabel_);
     updateButton_ = new QPushButton(QStringLiteral("Проверить обновления"), page);
     layout->addWidget(updateButton_);
+    diagnosticsButton_ = new QPushButton(QStringLiteral("Скопировать диагностику"), page);
+    layout->addWidget(diagnosticsButton_);
     layout->addWidget(description(QStringLiteral("Телеметрия отключена. Проверка обновлений будет ручной через GitHub Releases и по умолчанию отключена."), page));
     layout->addStretch();
     connect(durationSpin_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) { settings_.buffer.durationSeconds = value; });
     connect(themeCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::chooseTheme);
     connect(updateButton_, &QPushButton::clicked, this, &MainWindow::checkForUpdates);
+    connect(diagnosticsButton_, &QPushButton::clicked, this, &MainWindow::copyDiagnostics);
     return page;
 }
 
@@ -584,6 +590,14 @@ void MainWindow::checkForUpdates() {
     updater_.check();
 }
 
+void MainWindow::copyDiagnostics() {
+    const QString selectedMonitor = monitorCombo_ == nullptr ? QString() : monitorCombo_->currentData().toString();
+    const QString report = Platform::Diagnostics::snapshot(recorder_.ffmpegPath(), monitors_.size(), selectedMonitor,
+                                                           recorder_.isRecording(), recorder_.isPaused());
+    QApplication::clipboard()->setText(report);
+    showToast(QStringLiteral("Диагностика скопирована в буфер обмена."));
+}
+
 void MainWindow::refreshMonitors() {
     const auto detected = Platform::MonitorEnumerator::enumerate();
     QString signature;
@@ -618,14 +632,18 @@ void MainWindow::handleHotkey(const Platform::HotkeyAction action) {
 }
 
 void MainWindow::showRecorderError(const QString& text) {
+    Platform::Diagnostics::append(QStringLiteral("ERROR"), text);
     showToast(text, true);
 }
 
 void MainWindow::showRecorderMessage(const QString& text) {
+    Platform::Diagnostics::append(QStringLiteral("INFO"), text);
     showToast(text);
 }
 
 void MainWindow::onClipSaved(const QString& path) {
+    lastSavedPath_ = path;
+    Platform::Diagnostics::append(QStringLiteral("INFO"), QStringLiteral("Clip export completed."));
     showToast(QStringLiteral("Клип сохранён: %1").arg(QFileInfo(path).fileName()));
     if (tray_ != nullptr && settings_.notifications.enabled) {
         tray_->showMessage(QStringLiteral("LastFrame"), QStringLiteral("Клип сохранён"), QSystemTrayIcon::Information, 2500);
@@ -727,6 +745,17 @@ void MainWindow::setupTray() {
         if (reason == QSystemTrayIcon::Trigger) {
             showFromSingleInstance();
         }
+    });
+    connect(tray_, &QSystemTrayIcon::messageClicked, this, [this] {
+        if (lastSavedPath_.isEmpty()) {
+            return;
+        }
+#if defined(Q_OS_WIN)
+        QProcess::startDetached(QStringLiteral("explorer.exe"),
+                                {QStringLiteral("/select,"), QDir::toNativeSeparators(lastSavedPath_)});
+#else
+        QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(lastSavedPath_).absolutePath()));
+#endif
     });
     tray_->show();
 }
