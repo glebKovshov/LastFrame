@@ -188,6 +188,10 @@ void testSettings() {
     assert(normalized.notifications.corner == "top_right");
     assert(normalized.notifications.durationMs == 10000);
     assert(normalized.notifications.opacity == 0.20);
+    const auto webmPair = Settings::fromJson({{"video", {{"container", "webm"}, {"codec", "h264_nvenc"}}}});
+    assert(webmPair.video.codec == "libvpx-vp9");
+    const auto mp4Pair = Settings::fromJson({{"video", {{"container", "mp4"}, {"codec", "libvpx-vp9"}}}});
+    assert(mp4Pair.video.codec == "auto");
     for (const char* codec : {"h264_nvenc", "h264_amf", "h264_qsv", "h264_videotoolbox", "libx264", "libvpx-vp9"}) {
         const auto codecSettings = Settings::fromJson({{"video", {{"codec", codec}}}});
         assert(codecSettings.video.codec == codec);

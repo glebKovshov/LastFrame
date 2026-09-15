@@ -169,6 +169,14 @@ Settings Settings::fromJson(const nlohmann::json& json) {
         settings.video.codec != "libvpx-vp9") {
         settings.video.codec = "auto";
     }
+    // VP9 is the WebM profile in the portable recorder. Keep invalid
+    // container/codec pairs from entering the media layer through JSON or
+    // another non-UI caller.
+    if (settings.video.container == "webm" && settings.video.codec != "libvpx-vp9") {
+        settings.video.codec = "libvpx-vp9";
+    } else if (settings.video.container != "webm" && settings.video.codec == "libvpx-vp9") {
+        settings.video.codec = "auto";
+    }
     settings.video.preset = readValue(video, "preset", settings.video.preset);
     if (settings.video.preset != "low" && settings.video.preset != "medium" && settings.video.preset != "high" &&
         settings.video.preset != "ultra" && settings.video.preset != "custom") {
