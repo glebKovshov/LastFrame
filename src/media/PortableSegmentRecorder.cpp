@@ -188,6 +188,11 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
     attemptedNativeAudioFallback_ = false;
 #if defined(Q_OS_WIN)
     useNativeCapture_ = prepareNativeCapture();
+    const bool forceWindowsGraphicsCapture = qEnvironmentVariable("LASTFRAME_FORCE_WGC") == QStringLiteral("1");
+    if (forceWindowsGraphicsCapture) {
+        useNativeCapture_ = false;
+        attemptedNativeCaptureFallback_ = true;
+    }
     if (!useNativeCapture_) {
         useWindowsGraphicsCapture_ = prepareWindowsGraphicsCapture();
     }

@@ -30,6 +30,8 @@
 - Native Windows Graphics Capture fallback через C++/WinRT + D3D11: тот же
   monitor/region crop, cursor capture, постоянный FPS и raw-BGRA pipe; при
   ошибке возвращается к portable FFmpeg backend.
+- WGC backend дополнительно прогнан end-to-end hardware smoke через
+  `LASTFRAME_FORCE_WGC=1`: H.264 640×360 и AAC 48 kHz stereo успешно созданы.
 - Поиск аудиоустройств через FFmpeg: системный WASAPI output и микрофоны DirectShow,
   выбор устройства, независимая громкость и fallback system → microphone → video.
 - Encoder fallback: при ошибке Auto/NVENC повторяется запуск с software H.264.
