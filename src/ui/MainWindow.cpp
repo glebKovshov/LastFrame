@@ -716,6 +716,8 @@ QWidget* MainWindow::buildStoragePage() {
     layout->addWidget(storageState);
     auto* choose = new QPushButton(QStringLiteral("Выбрать каталог клипов"), page);
     layout->addWidget(choose);
+    auto* open = new QPushButton(QStringLiteral("Открыть каталог клипов"), page);
+    layout->addWidget(open);
 
     const QString defaultPath = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame";
     const auto selectedPath = [this, defaultPath] {
@@ -757,6 +759,11 @@ QWidget* MainWindow::buildStoragePage() {
         refreshStorage();
         choose->setToolTip(selected);
         showToast(QStringLiteral("Каталог клипов изменён."));
+    });
+    connect(open, &QPushButton::clicked, this, [selectedPath] {
+        const QString directory = selectedPath();
+        QDir().mkpath(directory);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(directory));
     });
     return page;
 }
@@ -1216,6 +1223,7 @@ void MainWindow::setupTray() {
     menu->addSeparator();
     auto* clear = menu->addAction(QStringLiteral("Очистить буфер"));
     trayMuteAction_ = menu->addAction(QStringLiteral("Выключить микрофон"));
+    auto* openClips = menu->addAction(QStringLiteral("Открыть папку клипов"));
     auto* settings = menu->addAction(QStringLiteral("Настройки"));
     auto* quit = menu->addAction(QStringLiteral("Выход"));
     connect(save, &QAction::triggered, this, &MainWindow::saveClip);
@@ -1223,6 +1231,13 @@ void MainWindow::setupTray() {
     connect(pause, &QAction::triggered, this, &MainWindow::pauseOrResume);
     connect(clear, &QAction::triggered, this, &MainWindow::clearBuffer);
     connect(trayMuteAction_, &QAction::triggered, this, &MainWindow::toggleMicrophoneMute);
+    connect(openClips, &QAction::triggered, this, [this] {
+        const QString directory = settings_.storage.clipsDirectory.empty()
+                                      ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame"
+                                      : QString::fromStdString(settings_.storage.clipsDirectory.string());
+        QDir().mkpath(directory);
+        QDesktopServices::openUrl(QUrl::fromLocalFile(directory));
+    });
     connect(settings, &QAction::triggered, this, &MainWindow::showFromSingleInstance);
     connect(quit, &QAction::triggered, this, [this] { forceQuit_ = true; qApp->quit(); });
     tray_->setContextMenu(menu);
