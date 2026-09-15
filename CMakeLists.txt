@@ -71,6 +71,8 @@ if(LASTFRAME_BUILD_UI)
             src/media/PortableSegmentRecorder.cpp
             src/ui/MainWindow.cpp
             src/ui/MainWindow.h
+            src/ui/RegionSelector.cpp
+            src/ui/RegionSelector.h
         )
 
         target_link_libraries(LastFrame PRIVATE

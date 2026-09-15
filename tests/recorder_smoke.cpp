@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <iostream>
+#include <set>
 
 int main(int argc, char* argv[]) {
     QGuiApplication application(argc, argv);
@@ -20,18 +21,38 @@ int main(int argc, char* argv[]) {
     // Exercise the default audio path as well. On FFmpeg builds without a
     // WASAPI demuxer the recorder must fall back to video-only capture.
     settings.audio.systemEnabled = true;
+    // Exercise the region path on the real desktop instead of only testing
+    // the full-monitor default.
+    settings.capture.source = "custom_region";
+    settings.capture.regionX = 0;
+    settings.capture.regionY = 0;
+    settings.capture.regionWidth = 640;
+    settings.capture.regionHeight = 360;
+    settings.capture.outputWidth = 640;
+    settings.capture.outputHeight = 360;
     settings.capture.fps = 30;
+    const QString requestedContainer = qEnvironmentVariable("LASTFRAME_SMOKE_CONTAINER");
+    if (!requestedContainer.isEmpty()) {
+        settings.video.container = requestedContainer.toStdString();
+    }
 
     LastFrame::Media::PortableSegmentRecorder recorder;
     bool success = false;
+    std::set<QString> savedPaths;
     QObject::connect(&recorder, &LastFrame::Media::PortableSegmentRecorder::started,
                      &application, [&recorder] {
                          QTimer::singleShot(4500, &recorder, &LastFrame::Media::PortableSegmentRecorder::saveClip);
+                         QTimer::singleShot(4700, &recorder, &LastFrame::Media::PortableSegmentRecorder::saveClip);
                      });
     QObject::connect(&recorder, &LastFrame::Media::PortableSegmentRecorder::clipSaved,
-                     &application, [&application, &success](const QString& path) {
-                         success = QFileInfo::exists(path) && QFileInfo(path).size() > 0;
-                         QTimer::singleShot(250, &application, &QCoreApplication::quit);
+                     &application, [&application, &success, &savedPaths](const QString& path) {
+                         if (QFileInfo::exists(path) && QFileInfo(path).size() > 0) {
+                             savedPaths.insert(path);
+                         }
+                         if (savedPaths.size() == 2) {
+                             success = true;
+                             QTimer::singleShot(250, &application, &QCoreApplication::quit);
+                         }
                      });
     QObject::connect(&recorder, &LastFrame::Media::PortableSegmentRecorder::error,
                      &application, [](const QString& text) {

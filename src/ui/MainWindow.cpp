@@ -1,4 +1,5 @@
 #include "ui/MainWindow.h"
+#include "ui/RegionSelector.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -17,6 +18,7 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QSpinBox>
+#include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QStandardPaths>
 #include <QStyle>
@@ -197,11 +199,21 @@ QWidget* MainWindow::buildCapturePage() {
     auto* form = new QFormLayout;
     monitorCombo_ = new QComboBox(page);
     form->addRow(QStringLiteral("Монитор"), monitorCombo_);
-    auto* source = new QComboBox(page);
-    source->addItem(QStringLiteral("Весь монитор"), QStringLiteral("full_monitor"));
-    source->addItem(QStringLiteral("Прямоугольная область"), QStringLiteral("custom_region"));
-    source->setEnabled(false);
-    form->addRow(QStringLiteral("Источник"), source);
+    sourceCombo_ = new QComboBox(page);
+    sourceCombo_->addItem(QStringLiteral("Весь монитор"), QStringLiteral("full_monitor"));
+    sourceCombo_->addItem(QStringLiteral("Прямоугольная область"), QStringLiteral("custom_region"));
+    sourceCombo_->setCurrentIndex(settings_.capture.source == "custom_region" ? 1 : 0);
+    form->addRow(QStringLiteral("Источник"), sourceCombo_);
+    regionButton_ = new QPushButton(QStringLiteral("Выбрать область"), page);
+    regionButton_->setEnabled(sourceCombo_->currentIndex() == 1);
+    if (settings_.capture.regionWidth > 3 && settings_.capture.regionHeight > 3) {
+        regionButton_->setText(QStringLiteral("%1 × %2 (%3, %4)")
+                                   .arg(settings_.capture.regionWidth)
+                                   .arg(settings_.capture.regionHeight)
+                                   .arg(settings_.capture.regionX)
+                                   .arg(settings_.capture.regionY));
+    }
+    form->addRow(QStringLiteral("Регион"), regionButton_);
     auto* cursor = new QCheckBox(QStringLiteral("Показывать курсор"), page);
     cursor->setChecked(settings_.capture.showCursor);
     form->addRow(QString(), cursor);
@@ -209,16 +221,35 @@ QWidget* MainWindow::buildCapturePage() {
     fpsSpin_->setRange(15, 360);
     fpsSpin_->setValue(settings_.capture.fps);
     form->addRow(QStringLiteral("FPS"), fpsSpin_);
+    outputWidthSpin_ = new QSpinBox(page);
+    outputWidthSpin_->setRange(0, 16384);
+    outputWidthSpin_->setSpecialValueText(QStringLiteral("Native"));
+    outputWidthSpin_->setValue(settings_.capture.outputWidth);
+    form->addRow(QStringLiteral("Ширина вывода"), outputWidthSpin_);
+    outputHeightSpin_ = new QSpinBox(page);
+    outputHeightSpin_->setRange(0, 16384);
+    outputHeightSpin_->setSpecialValueText(QStringLiteral("Native"));
+    outputHeightSpin_->setValue(settings_.capture.outputHeight);
+    form->addRow(QStringLiteral("Высота вывода"), outputHeightSpin_);
     layout->addLayout(form);
-    layout->addWidget(description(QStringLiteral("Выбор региона и DPI-aware overlay подключаются следующим Windows-срезом. Пока MVP захватывает весь выбранный монитор."), page));
+    layout->addWidget(description(QStringLiteral("Регион ограничивается выбранным монитором. Параметры применяются при следующем запуске буфера."), page));
     layout->addStretch();
     connect(monitorCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
         if (index >= 0 && index < monitors_.size()) {
             settings_.capture.monitorId = monitors_.at(index).id.toStdString();
         }
     });
+    connect(sourceCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
+        settings_.capture.source = sourceCombo_->itemData(index).toString().toStdString();
+        regionButton_->setEnabled(index == 1);
+    });
+    connect(regionButton_, &QPushButton::clicked, this, &MainWindow::chooseRegion);
     connect(cursor, &QCheckBox::toggled, this, [this](bool value) { settings_.capture.showCursor = value; });
     connect(fpsSpin_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) { settings_.capture.fps = value; });
+    connect(outputWidthSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this](int value) { settings_.capture.outputWidth = value; });
+    connect(outputHeightSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this](int value) { settings_.capture.outputHeight = value; });
     return page;
 }
 
@@ -229,21 +260,86 @@ QWidget* MainWindow::buildVideoPage() {
     layout->addWidget(heading(QStringLiteral("Video"), page));
     layout->addWidget(description(QStringLiteral("MVP использует MP4 как основной формат и аппаратный H.264 NVENC на NVIDIA."), page));
     auto* form = new QFormLayout;
-    auto* container = new QComboBox(page);
-    container->addItems({QStringLiteral("MP4"), QStringLiteral("MKV"), QStringLiteral("WebM")});
-    container->setCurrentText(QStringLiteral("MP4"));
-    container->setEnabled(false);
-    form->addRow(QStringLiteral("Контейнер"), container);
-    auto* codec = new QComboBox(page);
-    codec->addItems({QStringLiteral("Auto"), QStringLiteral("H.264 NVENC"), QStringLiteral("Software fallback")});
-    form->addRow(QStringLiteral("Кодек"), codec);
-    auto* preset = new QComboBox(page);
-    preset->addItems({QStringLiteral("Low"), QStringLiteral("Medium"), QStringLiteral("High"), QStringLiteral("Ultra"), QStringLiteral("Custom")});
-    preset->setCurrentText(QStringLiteral("High"));
-    form->addRow(QStringLiteral("Пресет"), preset);
+    containerCombo_ = new QComboBox(page);
+    containerCombo_->addItem(QStringLiteral("MP4"), QStringLiteral("mp4"));
+    containerCombo_->addItem(QStringLiteral("MKV"), QStringLiteral("mkv"));
+    containerCombo_->addItem(QStringLiteral("WebM"), QStringLiteral("webm"));
+    const int containerIndex = containerCombo_->findData(QString::fromStdString(settings_.video.container));
+    containerCombo_->setCurrentIndex(containerIndex >= 0 ? containerIndex : 0);
+    form->addRow(QStringLiteral("Контейнер"), containerCombo_);
+    codecCombo_ = new QComboBox(page);
+    codecCombo_->addItem(QStringLiteral("Auto"), QStringLiteral("auto"));
+    codecCombo_->addItem(QStringLiteral("H.264 NVENC"), QStringLiteral("h264_nvenc"));
+    codecCombo_->addItem(QStringLiteral("Software H.264"), QStringLiteral("libx264"));
+    codecCombo_->addItem(QStringLiteral("VP9 (WebM)"), QStringLiteral("libvpx-vp9"));
+    const int codecIndex = codecCombo_->findData(QString::fromStdString(settings_.video.codec));
+    codecCombo_->setCurrentIndex(codecIndex >= 0 ? codecIndex : 0);
+    form->addRow(QStringLiteral("Кодек"), codecCombo_);
+    presetCombo_ = new QComboBox(page);
+    presetCombo_->addItems({QStringLiteral("Low"), QStringLiteral("Medium"), QStringLiteral("High"),
+                            QStringLiteral("Ultra"), QStringLiteral("Custom")});
+    const int presetIndex = presetCombo_->findText(QString::fromStdString(settings_.video.preset),
+                                                   Qt::MatchFixedString | Qt::MatchCaseInsensitive);
+    presetCombo_->setCurrentIndex(presetIndex >= 0 ? presetIndex : 2);
+    form->addRow(QStringLiteral("Пресет"), presetCombo_);
+    bitrateSpin_ = new QSpinBox(page);
+    bitrateSpin_->setRange(1000, 100000);
+    bitrateSpin_->setSuffix(QStringLiteral(" kbps"));
+    bitrateSpin_->setValue(settings_.video.customBitrateKbps);
+    form->addRow(QStringLiteral("Custom bitrate"), bitrateSpin_);
+    maxFileSizeSpin_ = new QSpinBox(page);
+    maxFileSizeSpin_->setRange(64, 4096);
+    maxFileSizeSpin_->setSuffix(QStringLiteral(" MiB"));
+    maxFileSizeSpin_->setValue(settings_.video.maxFileSizeMiB);
+    form->addRow(QStringLiteral("Лимит файла"), maxFileSizeSpin_);
     layout->addLayout(form);
-    layout->addWidget(description(QStringLiteral("FFmpeg запускается из portable-каталога. При недоступности NVENC приложение сообщает об ошибке; безопасный software fallback добавляется отдельным срезом."), page));
+    layout->addWidget(description(QStringLiteral("MP4/MKV используют H.264, WebM — VP9. Auto выбирает H.264 NVENC на Windows и сохраняет fallback через software encoder."), page));
     layout->addStretch();
+    connect(containerCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
+        settings_.video.container = containerCombo_->itemData(index).toString().toStdString();
+        const bool webm = settings_.video.container == "webm";
+        if (webm && codecCombo_->currentData().toString() != QStringLiteral("libvpx-vp9")) {
+            codecCombo_->setCurrentIndex(codecCombo_->findData(QStringLiteral("libvpx-vp9")));
+        } else if (!webm && codecCombo_->currentData().toString() == QStringLiteral("libvpx-vp9")) {
+            codecCombo_->setCurrentIndex(codecCombo_->findData(QStringLiteral("auto")));
+        }
+    });
+    connect(codecCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int index) {
+                if (containerCombo_->currentData().toString() == QStringLiteral("webm") &&
+                    codecCombo_->itemData(index).toString() != QStringLiteral("libvpx-vp9")) {
+                    codecCombo_->setCurrentIndex(codecCombo_->findData(QStringLiteral("libvpx-vp9")));
+                    return;
+                }
+                settings_.video.codec = codecCombo_->itemData(index).toString().toStdString();
+            });
+    connect(presetCombo_, &QComboBox::currentTextChanged, this,
+            [this](const QString& value) {
+                settings_.video.preset = value.toLower().toStdString();
+                const bool custom = value.compare(QStringLiteral("Custom"), Qt::CaseInsensitive) == 0;
+                bitrateSpin_->setReadOnly(!custom);
+                if (!custom) {
+                    const int bitrate = value.compare(QStringLiteral("Low"), Qt::CaseInsensitive) == 0 ? 6000
+                                        : value.compare(QStringLiteral("Medium"), Qt::CaseInsensitive) == 0 ? 10000
+                                        : value.compare(QStringLiteral("Ultra"), Qt::CaseInsensitive) == 0 ? 24000
+                                                                                                           : 16000;
+                    const QSignalBlocker blocker(bitrateSpin_);
+                    bitrateSpin_->setValue(bitrate);
+                }
+            });
+    connect(bitrateSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this](int value) { settings_.video.customBitrateKbps = value; });
+    connect(maxFileSizeSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this](int value) { settings_.video.maxFileSizeMiB = value; });
+    const bool customPreset = presetCombo_->currentText().compare(QStringLiteral("Custom"), Qt::CaseInsensitive) == 0;
+    bitrateSpin_->setReadOnly(!customPreset);
+    if (!customPreset) {
+        const QString value = presetCombo_->currentText();
+        const int bitrate = value.compare(QStringLiteral("Low"), Qt::CaseInsensitive) == 0 ? 6000
+                            : value.compare(QStringLiteral("Medium"), Qt::CaseInsensitive) == 0 ? 10000
+                            : value.compare(QStringLiteral("Ultra"), Qt::CaseInsensitive) == 0 ? 24000 : 16000;
+        bitrateSpin_->setValue(bitrate);
+    }
     return page;
 }
 
@@ -376,6 +472,35 @@ void MainWindow::saveClip() {
 
 void MainWindow::clearBuffer() {
     recorder_.clearBuffer();
+}
+
+void MainWindow::chooseRegion() {
+    const int index = monitorCombo_ == nullptr ? -1 : monitorCombo_->currentIndex();
+    if (index < 0 || index >= monitors_.size()) {
+        showToast(QStringLiteral("Сначала выберите монитор."), true);
+        return;
+    }
+
+    RegionSelector selector(monitors_.at(index).geometry, this);
+    if (selector.exec() != QDialog::Accepted) {
+        return;
+    }
+    const QRect selection = selector.selectedRegion();
+    if (selection.width() < 4 || selection.height() < 4) {
+        showToast(QStringLiteral("Регион слишком мал."), true);
+        return;
+    }
+    settings_.capture.source = "custom_region";
+    settings_.capture.regionX = selection.x();
+    settings_.capture.regionY = selection.y();
+    settings_.capture.regionWidth = selection.width();
+    settings_.capture.regionHeight = selection.height();
+    sourceCombo_->setCurrentIndex(sourceCombo_->findData(QStringLiteral("custom_region")));
+    regionButton_->setText(QStringLiteral("%1 × %2 (%3, %4)")
+                               .arg(selection.width())
+                               .arg(selection.height())
+                               .arg(selection.x())
+                               .arg(selection.y()));
 }
 
 void MainWindow::refreshMonitors() {

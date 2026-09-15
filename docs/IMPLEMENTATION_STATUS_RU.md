@@ -18,6 +18,10 @@
 - Qt Widgets UI с overview, страницами настроек и tray menu.
 - Windows global hotkeys через `RegisterHotKey`.
 - Segment recorder adapter с поиском portable `ffmpeg.exe`.
+- Region selector overlay с ограничением области выбранным монитором.
+- Настраиваемые output width/height, FPS, контейнер MP4/MKV/WebM,
+  encoder preset/bitrate и лимит размера файла.
+- Ограниченная очередь export jobs и резервирование имён при параллельных сохранениях.
 - GitHub Actions для core tests и Windows portable artifact.
 
 ## Следующие обязательные срезы по ТЗ

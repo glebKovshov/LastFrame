@@ -49,6 +49,7 @@ private slots:
 private:
     struct ExportJob {
         QProcess* process = nullptr;
+        QTemporaryFile* listFile = nullptr;
         QString listPath;
         QString temporaryPath;
         QString finalPath;
@@ -60,7 +61,7 @@ private:
     [[nodiscard]] int nextSegmentNumber() const;
     [[nodiscard]] QString escapeConcatPath(const QString& path) const;
     [[nodiscard]] QString selectedMonitorLabel() const;
-    void startProcess(bool withAudio);
+    void startProcess(bool withAudio, bool announceStarted = true);
     void finishExport(ExportJob* job, int exitCode, QProcess::ExitStatus status);
 
     LastFrame::Core::Settings settings_;

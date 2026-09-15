@@ -39,6 +39,7 @@ private slots:
     void pauseOrResume();
     void saveClip();
     void clearBuffer();
+    void chooseRegion();
     void refreshMonitors();
     void chooseTheme(int index);
     void handleHotkey(LastFrame::Platform::HotkeyAction action);
@@ -84,8 +85,17 @@ private:
     QPushButton* saveButton_ = nullptr;
     QPushButton* clearButton_ = nullptr;
     QComboBox* monitorCombo_ = nullptr;
+    QComboBox* sourceCombo_ = nullptr;
+    QPushButton* regionButton_ = nullptr;
     QSpinBox* durationSpin_ = nullptr;
     QSpinBox* fpsSpin_ = nullptr;
+    QSpinBox* outputWidthSpin_ = nullptr;
+    QSpinBox* outputHeightSpin_ = nullptr;
+    QComboBox* containerCombo_ = nullptr;
+    QComboBox* codecCombo_ = nullptr;
+    QComboBox* presetCombo_ = nullptr;
+    QSpinBox* bitrateSpin_ = nullptr;
+    QSpinBox* maxFileSizeSpin_ = nullptr;
     QComboBox* themeCombo_ = nullptr;
     QCheckBox* systemAudioCheck_ = nullptr;
     QCheckBox* microphoneCheck_ = nullptr;

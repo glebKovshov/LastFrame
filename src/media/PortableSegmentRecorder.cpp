@@ -29,6 +29,11 @@ PortableSegmentRecorder::~PortableSegmentRecorder() {
             job->process->kill();
             job->process->deleteLater();
         }
+        if (job->listFile != nullptr) {
+            job->listFile->close();
+            job->listFile->remove();
+            job->listFile->deleteLater();
+        }
         delete job;
     }
     exports_.clear();
@@ -49,6 +54,13 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
                             ? QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/segments"
                             : QString::fromStdString(settings_.buffer.temporaryDirectory.string());
     QDir().mkpath(segmentDirectory_);
+    const QDir directory(segmentDirectory_);
+    for (const QFileInfo& file : directory.entryInfoList({QStringLiteral("segment_*.mkv"),
+                                                           QStringLiteral("concat-*.txt"),
+                                                           QStringLiteral("*.tmp")},
+                                                          QDir::Files)) {
+        QFile::remove(file.absoluteFilePath());
+    }
     attemptedVideoOnlyFallback_ = false;
     paused_ = false;
     startProcess(true);
@@ -133,17 +145,34 @@ void PortableSegmentRecorder::saveClip() {
         emit error(QStringLiteral("В буфере пока нет готовых сегментов."));
         return;
     }
+    if (exports_.size() >= settings_.storage.maxQueueLength) {
+        emit error(QStringLiteral("Очередь экспорта заполнена. Дождитесь завершения предыдущих клипов."));
+        return;
+    }
 
     const QString clipsDirectory = settings_.storage.clipsDirectory.empty()
                                        ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame"
                                        : QString::fromStdString(settings_.storage.clipsDirectory.string());
     QDir().mkpath(clipsDirectory);
+    QString container = QString::fromStdString(settings_.video.container).toLower();
+    if (container != QStringLiteral("mp4") && container != QStringLiteral("mkv") &&
+        container != QStringLiteral("webm")) {
+        container = QStringLiteral("mp4");
+    }
     const auto target = Core::FilenameAllocator::allocate(
-        std::filesystem::path(clipsDirectory.toStdString()), system_clock::now(), "mp4");
+        std::filesystem::path(clipsDirectory.toStdString()), system_clock::now(), container.toStdString());
+    const QString finalPath = QString::fromStdString(target.string());
+    QFile reservation(finalPath);
+    if (!reservation.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
+        emit error(QStringLiteral("Не удалось зарезервировать имя итогового клипа."));
+        return;
+    }
+    reservation.close();
 
     auto* listFile = new QTemporaryFile(segmentDirectory_ + "/concat-XXXXXX.txt", this);
     listFile->setAutoRemove(false);
     if (!listFile->open()) {
+        QFile::remove(finalPath);
         listFile->deleteLater();
         emit error(QStringLiteral("Не удалось создать список сегментов для экспорта."));
         return;
@@ -151,15 +180,20 @@ void PortableSegmentRecorder::saveClip() {
     QByteArray content("ffconcat version 1.0\n");
     for (const QString& file : files) {
         content += "file '" + escapeConcatPath(file).toUtf8() + "'\n";
+        // Every closed capture segment is cut on a one-second boundary. The
+        // explicit duration gives the concat demuxer a monotonic timeline
+        // when Matroska packet timestamps restart at zero per segment.
+        content += "duration 1.0\n";
     }
     listFile->write(content);
     listFile->close();
 
     auto* job = new ExportJob;
+    job->listFile = listFile;
     job->listPath = listFile->fileName();
     job->temporaryPath = QString::fromStdString(target.string());
     job->temporaryPath += ".tmp";
-    job->finalPath = QString::fromStdString(target.string());
+    job->finalPath = finalPath;
     QFile::remove(job->temporaryPath);
     job->process = new QProcess(this);
     job->process->setProcessChannelMode(QProcess::MergedChannels);
@@ -171,13 +205,29 @@ void PortableSegmentRecorder::saveClip() {
         emit error(QStringLiteral("FFmpeg не смог запустить экспорт клипа."));
     });
 
-    const QStringList args{
+    QStringList args{
         QStringLiteral("-hide_banner"), QStringLiteral("-loglevel"), QStringLiteral("error"),
+        QStringLiteral("-fflags"), QStringLiteral("+genpts"),
         QStringLiteral("-f"), QStringLiteral("concat"), QStringLiteral("-safe"), QStringLiteral("0"),
-        QStringLiteral("-i"), job->listPath, QStringLiteral("-c"), QStringLiteral("copy"),
-        QStringLiteral("-movflags"), QStringLiteral("+faststart"),
-        QStringLiteral("-f"), QStringLiteral("mp4"), job->temporaryPath,
+        QStringLiteral("-i"), job->listPath,
     };
+    if (container == QStringLiteral("mkv")) {
+        // FFmpeg's Matroska muxer rejects the restarted packet timestamps
+        // from concat'ed one-second segments when they are stream-copied.
+        // Re-encode this less latency-sensitive format for a valid timeline.
+        args << QStringLiteral("-c:v") << QStringLiteral("libx264")
+             << QStringLiteral("-preset") << QStringLiteral("veryfast")
+             << QStringLiteral("-crf") << QStringLiteral("18")
+             << QStringLiteral("-c:a") << QStringLiteral("aac");
+    } else {
+        args << QStringLiteral("-c") << QStringLiteral("copy");
+    }
+    if (container == QStringLiteral("mp4")) {
+        args << QStringLiteral("-movflags") << QStringLiteral("+faststart");
+    }
+    args << QStringLiteral("-f")
+         << (container == QStringLiteral("mkv") ? QStringLiteral("matroska") : container)
+         << job->temporaryPath;
     job->process->start(ffmpegPath_, args);
     emit message(QStringLiteral("Экспорт клипа поставлен в очередь."));
 }
@@ -196,7 +246,7 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
     if (recording_ && exitCode != 0 && processHasAudio_ && !attemptedVideoOnlyFallback_) {
         attemptedVideoOnlyFallback_ = true;
         emit message(QStringLiteral("Системный звук недоступен; повторяю захват только с видео."));
-        startProcess(false);
+        startProcess(false, false);
         return;
     }
     if (recording_ && exitCode != 0) {
@@ -236,8 +286,19 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
         monitors, QString::fromStdString(settings_.capture.monitorId));
     const Platform::MonitorInfo monitor = monitors.value(std::max(0, monitorIndex));
     const int fps = std::clamp(settings_.capture.fps, 15, std::max(15, monitor.refreshRate));
-    const int outputWidth = settings_.capture.outputWidth > 0 ? settings_.capture.outputWidth : monitor.resolution.width();
-    const int outputHeight = settings_.capture.outputHeight > 0 ? settings_.capture.outputHeight : monitor.resolution.height();
+    QRect captureRect = monitor.geometry;
+    if (settings_.capture.source == "custom_region" && settings_.capture.regionWidth > 3 &&
+        settings_.capture.regionHeight > 3) {
+        const QRect localRegion(settings_.capture.regionX, settings_.capture.regionY,
+                                settings_.capture.regionWidth, settings_.capture.regionHeight);
+        const QRect monitorLocal(QPoint(0, 0), monitor.geometry.size());
+        const QRect boundedRegion = localRegion.intersected(monitorLocal);
+        if (boundedRegion.width() > 3 && boundedRegion.height() > 3) {
+            captureRect = QRect(monitor.geometry.topLeft() + boundedRegion.topLeft(), boundedRegion.size());
+        }
+    }
+    const int outputWidth = settings_.capture.outputWidth > 0 ? settings_.capture.outputWidth : captureRect.width();
+    const int outputHeight = settings_.capture.outputHeight > 0 ? settings_.capture.outputHeight : captureRect.height();
     // The first portable MVP uses gdigrab because it is available in the
     // redistributable FFmpeg build and works on the current Windows test host.
     // DXGI Desktop Duplication / Windows Graphics Capture will replace this
@@ -247,9 +308,9 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
         QStringLiteral("-y"), QStringLiteral("-f"), QStringLiteral("gdigrab"),
         QStringLiteral("-framerate"), QString::number(fps),
         QStringLiteral("-draw_mouse"), settings_.capture.showCursor ? QStringLiteral("1") : QStringLiteral("0"),
-        QStringLiteral("-offset_x"), QString::number(monitor.geometry.x()),
-        QStringLiteral("-offset_y"), QString::number(monitor.geometry.y()),
-        QStringLiteral("-video_size"), QStringLiteral("%1x%2").arg(monitor.resolution.width()).arg(monitor.resolution.height()),
+        QStringLiteral("-offset_x"), QString::number(captureRect.x()),
+        QStringLiteral("-offset_y"), QString::number(captureRect.y()),
+        QStringLiteral("-video_size"), QStringLiteral("%1x%2").arg(captureRect.width()).arg(captureRect.height()),
         QStringLiteral("-i"), QStringLiteral("desktop"),
     };
     if (withAudio && settings_.audio.systemEnabled) {
@@ -263,13 +324,45 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
     if (withAudio && settings_.audio.systemEnabled) {
         args << QStringLiteral("-map") << QStringLiteral("1:a:0");
     }
+    const QString container = QString::fromStdString(settings_.video.container).toLower();
+    QString codec = QString::fromStdString(settings_.video.codec).toLower();
+    if (codec == QStringLiteral("auto")) {
+        codec = container == QStringLiteral("webm") ? QStringLiteral("libvpx-vp9") : QStringLiteral("h264_nvenc");
+    }
+    if (container == QStringLiteral("webm") && codec != QStringLiteral("libvpx-vp9")) {
+        codec = QStringLiteral("libvpx-vp9");
+    }
+    if (codec != QStringLiteral("h264_nvenc") && codec != QStringLiteral("libx264") &&
+        codec != QStringLiteral("libvpx-vp9")) {
+        codec = QStringLiteral("h264_nvenc");
+    }
+    QString preset = QString::fromStdString(settings_.video.preset).toLower();
+    const int bitrate = preset == QStringLiteral("low")      ? 6000
+                        : preset == QStringLiteral("medium") ? 10000
+                        : preset == QStringLiteral("ultra")  ? 24000
+                        : settings_.video.customBitrateKbps;
     args << QStringLiteral("-vf") << QStringLiteral("scale=%1:%2:flags=lanczos").arg(outputWidth).arg(outputHeight)
-         << QStringLiteral("-c:v") << QStringLiteral("h264_nvenc")
-         << QStringLiteral("-preset") << QStringLiteral("p5")
-         << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p")
+         << QStringLiteral("-c:v") << codec
+         << QStringLiteral("-b:v") << QStringLiteral("%1k").arg(bitrate);
+    if (codec == QStringLiteral("h264_nvenc")) {
+        args << QStringLiteral("-preset")
+             << (preset == QStringLiteral("low") ? QStringLiteral("p7")
+                 : preset == QStringLiteral("ultra") ? QStringLiteral("p1") : QStringLiteral("p5"));
+    } else if (codec == QStringLiteral("libx264")) {
+        args << QStringLiteral("-preset")
+             << (preset == QStringLiteral("low") ? QStringLiteral("veryfast")
+                 : preset == QStringLiteral("ultra") ? QStringLiteral("slow") : QStringLiteral("medium"));
+    } else {
+        args << QStringLiteral("-deadline") << QStringLiteral("good")
+             << QStringLiteral("-cpu-used") << (preset == QStringLiteral("low") ? QStringLiteral("6")
+                                                  : preset == QStringLiteral("ultra") ? QStringLiteral("2")
+                                                                                       : QStringLiteral("4"));
+    }
+    args << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p")
          << QStringLiteral("-force_key_frames") << QStringLiteral("expr:gte(t,n_forced*1)");
     if (withAudio && settings_.audio.systemEnabled) {
-        args << QStringLiteral("-c:a") << QStringLiteral("aac")
+        args << QStringLiteral("-c:a")
+             << (container == QStringLiteral("webm") ? QStringLiteral("libopus") : QStringLiteral("aac"))
              << QStringLiteral("-ar") << QString::number(settings_.audio.sampleRate)
              << QStringLiteral("-ac") << QStringLiteral("2");
     } else {
@@ -325,7 +418,7 @@ QString PortableSegmentRecorder::selectedMonitorLabel() const {
     return monitors.value(std::max(0, index)).name;
 }
 
-void PortableSegmentRecorder::startProcess(const bool withAudio) {
+void PortableSegmentRecorder::startProcess(const bool withAudio, const bool announceStarted) {
     if (captureProcess_ != nullptr) {
         captureProcess_->disconnect(this);
         captureProcess_->terminate();
@@ -347,7 +440,9 @@ void PortableSegmentRecorder::startProcess(const bool withAudio) {
     recording_ = true;
     paused_ = false;
     segmentTimer_.start();
-    emit started();
+    if (announceStarted) {
+        emit started();
+    }
 }
 
 void PortableSegmentRecorder::finishExport(ExportJob* job, const int exitCode,
@@ -361,17 +456,25 @@ void PortableSegmentRecorder::finishExport(ExportJob* job, const int exitCode,
         if (settings_.video.maxFileSizeMiB > 0 &&
             QFileInfo(job->temporaryPath).size() > static_cast<qint64>(settings_.video.maxFileSizeMiB) * 1024 * 1024) {
             QFile::remove(job->temporaryPath);
+            QFile::remove(job->finalPath);
             emit error(QStringLiteral("Клип превысил установленный лимит размера файла."));
-        } else if (QFile::rename(job->temporaryPath, job->finalPath)) {
+        } else if (QFile::remove(job->finalPath) && QFile::rename(job->temporaryPath, job->finalPath)) {
             emit clipSaved(job->finalPath);
         } else {
             emit error(QStringLiteral("Не удалось атомарно переименовать готовый клип."));
         }
     } else {
         QFile::remove(job->temporaryPath);
+        QFile::remove(job->finalPath);
         emit error(QStringLiteral("Экспорт клипа завершился ошибкой: %1").arg(output.left(300)));
     }
-    QFile::remove(job->listPath);
+    if (job->listFile != nullptr) {
+        job->listFile->close();
+        job->listFile->remove();
+        job->listFile->deleteLater();
+    } else {
+        QFile::remove(job->listPath);
+    }
     if (job->process != nullptr) {
         job->process->deleteLater();
     }
