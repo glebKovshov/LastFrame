@@ -487,6 +487,7 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
         startProcess(false, false);
         return;
     }
+#if defined(Q_OS_WIN)
     if (recording_ && exitCode != 0 && useDesktopDuplication_ && !attemptedDesktopDuplicationFallback_) {
         attemptedDesktopDuplicationFallback_ = true;
         useDesktopDuplication_ = false;
@@ -494,6 +495,7 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
         startProcess(processHasAudio_, false);
         return;
     }
+#endif
     if (recording_ && exitCode != 0 && tryNextAutomaticEncoder()) {
         startProcess(processHasAudio_, false);
         return;
@@ -590,6 +592,7 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
              << windowsGraphicsCapture_->inputPath();
     } else
 #endif
+#if defined(Q_OS_WIN)
     if (useDesktopDuplication_) {
         const QString filter = QStringLiteral("ddagrab=output_idx=%1:draw_mouse=%2:framerate=%3:video_size=%4x%5:offset_x=%6:offset_y=%7:output_fmt=bgra")
                                    .arg(std::max(0, monitorIndex))
@@ -609,10 +612,32 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
              << QStringLiteral("%1x%2").arg(captureRect.width()).arg(captureRect.height()) << QStringLiteral("-i")
              << QStringLiteral("desktop");
     }
+#elif defined(Q_OS_MAC)
+    const QString avfoundationScreen = qEnvironmentVariable("LASTFRAME_AVFOUNDATION_SCREEN", QStringLiteral("1"));
+    args << QStringLiteral("-f") << QStringLiteral("avfoundation") << QStringLiteral("-framerate")
+         << QString::number(fps) << QStringLiteral("-capture_cursor")
+         << (settings_.capture.showCursor ? QStringLiteral("1") : QStringLiteral("0"))
+         << QStringLiteral("-i") << (avfoundationScreen + QStringLiteral(":none"));
+#elif defined(Q_OS_LINUX)
+    args << QStringLiteral("-f") << QStringLiteral("x11grab") << QStringLiteral("-framerate")
+         << QString::number(fps) << QStringLiteral("-video_size")
+         << QStringLiteral("%1x%2").arg(captureRect.width()).arg(captureRect.height()) << QStringLiteral("-i")
+         << QStringLiteral(":0.0+%1,%2").arg(captureRect.x()).arg(captureRect.y());
+#else
+    args << QStringLiteral("-f") << QStringLiteral("lavfi") << QStringLiteral("-i")
+         << QStringLiteral("color=size=%1x%2:rate=%3")
+                .arg(captureRect.width()).arg(captureRect.height()).arg(fps);
+#endif
+#if defined(Q_OS_WIN)
     const bool includeNativeAudio = withAudio && useNativeAudio_;
     const bool includeSystemAudio = withAudio && !includeNativeAudio && settings_.audio.systemEnabled && captureSystemAudio_;
     const bool includeMicrophone = withAudio && !includeNativeAudio && !microphoneMuted_ &&
                                    settings_.audio.microphoneEnabled && !microphoneDeviceName_.isEmpty();
+#else
+    const bool includeNativeAudio = false;
+    const bool includeSystemAudio = false;
+    const bool includeMicrophone = false;
+#endif
     int systemInputIndex = -1;
     int microphoneInputIndex = -1;
     int nativeAudioInputIndex = -1;
@@ -672,7 +697,12 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
                         : preset == QStringLiteral("ultra")  ? 24000
                         : settings_.video.customBitrateKbps;
     const bool rawNativeCapture = useNativeCapture_ || useWindowsGraphicsCapture_;
-    const QString videoFilter = useDesktopDuplication_ && !rawNativeCapture
+#if defined(Q_OS_WIN)
+    const bool desktopDuplicationInput = useDesktopDuplication_ && !rawNativeCapture;
+#else
+    const bool desktopDuplicationInput = false;
+#endif
+    const QString videoFilter = desktopDuplicationInput
                                     ? QStringLiteral("hwdownload,format=bgra,scale=%1:%2:flags=lanczos")
                                     : QStringLiteral("scale=%1:%2:flags=lanczos");
     args << QStringLiteral("-vf") << videoFilter.arg(outputWidth).arg(outputHeight)
@@ -996,7 +1026,11 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
             return;
         }
 #endif
+#if defined(Q_OS_WIN)
         const bool canFallbackToGdi = useDesktopDuplication_ && !attemptedDesktopDuplicationFallback_;
+#else
+        const bool canFallbackToGdi = false;
+#endif
         emit error(QStringLiteral("[capture_failed] FFmpeg не запустился для монитора %1.").arg(selectedMonitorLabel()));
         captureProcess_->deleteLater();
         captureProcess_ = nullptr;
