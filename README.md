@@ -28,6 +28,12 @@ cmake --build build/core --config Debug
 ctest --preset core-only
 ```
 
+Portable Windows ZIP собирается воспроизводимым скриптом:
+
+```powershell
+.\packaging\windows-portable.ps1 -QtRoot C:\Qt\6.8.3\msvc2022_64 -FfmpegBin C:\path\to\ffmpeg\bin
+```
+
 ## MVP
 
 В MVP входят:
