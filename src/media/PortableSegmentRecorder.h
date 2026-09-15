@@ -45,6 +45,7 @@ public slots:
     void clearBuffer();
     void saveClip();
     void setMicrophoneMuted(bool muted);
+    void setGpuScalerCapability(bool cudaAvailable);
 
 signals:
     void started();
@@ -73,7 +74,7 @@ private:
     };
 
     [[nodiscard]] QString locateFfmpeg() const;
-    [[nodiscard]] QStringList captureArguments(bool withAudio) const;
+    [[nodiscard]] QStringList captureArguments(bool withAudio);
     [[nodiscard]] QStringList segmentFiles() const;
     [[nodiscard]] int nextSegmentNumber() const;
     [[nodiscard]] QString escapeConcatPath(const QString& path) const;
@@ -87,6 +88,7 @@ private:
     void recoverNativeAudio(const QString& reason);
     void promoteClosedSegmentsToRam();
     void evictOldSegments();
+    void discardIncompleteCaptureSegment();
     void retainSnapshot(const QStringList& files);
     void releaseSnapshot(const QStringList& files);
     void startProcess(bool withAudio, bool announceStarted = true);
@@ -118,6 +120,8 @@ private:
     bool useSoftwareEncoder_ = false;
     bool attemptedEncoderFallback_ = false;
     int automaticEncoderAttempt_ = 0;
+    bool gpuScalerCudaAvailable_ = false;
+    bool gpuScalerActive_ = false;
     QMap<QString, QByteArray> ramSegments_;
     qint64 ramSegmentBytes_ = 0;
     QHash<QString, int> snapshotReferences_;

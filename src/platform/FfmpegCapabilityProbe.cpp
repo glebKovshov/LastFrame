@@ -88,6 +88,10 @@ void FfmpegCapabilityProbe::parseQueryOutput(const QString& output) {
         capabilities_.version = firstLine;
     } else if (query == QStringLiteral("filters")) {
         capabilities_.desktopDuplication = output.contains(QStringLiteral("ddagrab"));
+        capabilities_.scaleCuda = output.contains(QStringLiteral("scale_cuda"));
+        capabilities_.scaleQsv = output.contains(QStringLiteral("scale_qsv"));
+        capabilities_.scaleVaapi = output.contains(QStringLiteral("scale_vaapi"));
+        capabilities_.scaleVulkan = output.contains(QStringLiteral("scale_vulkan"));
     } else if (query == QStringLiteral("devices")) {
         capabilities_.gdiCapture = output.contains(QStringLiteral("gdigrab"));
         capabilities_.directShow = output.contains(QStringLiteral("dshow"));

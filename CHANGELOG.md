@@ -19,6 +19,8 @@
   missing WASAPI, and FPS values above the selected monitor refresh rate.
 - Added a Windows notification-overlay smoke test that verifies
   `WDA_EXCLUDEFROMCAPTURE` through the real window API.
+- Added optional CUDA GPU scaling when FFmpeg `scale_cuda` and NVENC are both
+  available, with safe truncated-segment cleanup and CPU fallback.
 - Added local clip-directory selection, temporary-segment visibility, log opening and
   tray/Storage actions for opening the clips directory.
 - Added state-colored tray icon: gray idle, green recording, yellow paused/warning,

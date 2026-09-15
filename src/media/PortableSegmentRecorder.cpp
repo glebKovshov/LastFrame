@@ -308,6 +308,7 @@ void PortableSegmentRecorder::stop() {
         captureProcess_ = nullptr;
     }
     paused_ = false;
+    gpuScalerActive_ = false;
     segmentTimer_.stop();
     if (wasActive) {
         emit stopped();
@@ -533,6 +534,13 @@ void PortableSegmentRecorder::setMicrophoneMuted(const bool muted) {
     emit microphoneMuteChanged(muted);
 }
 
+void PortableSegmentRecorder::setGpuScalerCapability(const bool cudaAvailable) {
+    gpuScalerCudaAvailable_ = cudaAvailable;
+    if (!cudaAvailable) {
+        gpuScalerActive_ = false;
+    }
+}
+
 void PortableSegmentRecorder::reapSegments() {
     promoteClosedSegmentsToRam();
     evictOldSegments();
@@ -541,6 +549,19 @@ void PortableSegmentRecorder::reapSegments() {
 void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess::ExitStatus status) {
     Q_UNUSED(status)
     const QString processOutput = captureProcess_ == nullptr ? QString() : QString::fromLocal8Bit(captureProcess_->readAll());
+    if (recording_ && exitCode != 0) {
+        // A failed segment process can leave a truncated Matroska file behind.
+        // Remove only the newest writer segment before any recovery restart;
+        // older closed segments remain available for the ring/export queue.
+        discardIncompleteCaptureSegment();
+    }
+    if (recording_ && exitCode != 0 && gpuScalerActive_) {
+        gpuScalerActive_ = false;
+        gpuScalerCudaAvailable_ = false;
+        emit message(QStringLiteral("CUDA scaler не запустился; использую worker/software scaler."));
+        startProcess(processHasAudio_, false);
+        return;
+    }
     if (recording_ && exitCode != 0 && processHasAudio_ && !attemptedVideoOnlyFallback_) {
 #if defined(Q_OS_WIN)
         if (useNativeCapture_) {
@@ -630,7 +651,7 @@ QString PortableSegmentRecorder::locateFfmpeg() const {
     return QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
 }
 
-QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) const {
+QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) {
     const auto monitors = Platform::MonitorEnumerator::enumerate();
     const int monitorIndex = Platform::MonitorEnumerator::indexForId(
         monitors, QString::fromStdString(settings_.capture.monitorId));
@@ -772,9 +793,16 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
 #else
     const bool desktopDuplicationInput = false;
 #endif
-    const QString videoFilter = desktopDuplicationInput
-                                    ? QStringLiteral("hwdownload,format=bgra,scale=%1:%2:flags=lanczos")
-                                    : QStringLiteral("scale=%1:%2:flags=lanczos");
+    const bool needsScaling = outputWidth != physicalCaptureRect.width() || outputHeight != physicalCaptureRect.height();
+    gpuScalerActive_ = gpuScalerCudaAvailable_ && needsScaling && codec == QStringLiteral("h264_nvenc") &&
+                       container != QStringLiteral("webm") && !useSoftwareEncoder_;
+    const QString videoFilter = gpuScalerActive_
+                                    ? (desktopDuplicationInput
+                                           ? QStringLiteral("hwdownload,format=bgra,hwupload_cuda,scale_cuda=%1:%2:format=nv12")
+                                           : QStringLiteral("format=bgra,hwupload_cuda,scale_cuda=%1:%2:format=nv12"))
+                                    : desktopDuplicationInput
+                                          ? QStringLiteral("hwdownload,format=bgra,scale=%1:%2:flags=lanczos")
+                                          : QStringLiteral("scale=%1:%2:flags=lanczos");
     args << QStringLiteral("-vf") << videoFilter.arg(outputWidth).arg(outputHeight)
          << QStringLiteral("-c:v") << codec
          << QStringLiteral("-b:v") << QStringLiteral("%1k").arg(bitrate);
@@ -792,7 +820,7 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
                                                   : preset == QStringLiteral("ultra") ? QStringLiteral("2")
                                                                                        : QStringLiteral("4"));
     }
-    args << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p")
+    args << QStringLiteral("-pix_fmt") << (gpuScalerActive_ ? QStringLiteral("nv12") : QStringLiteral("yuv420p"))
          << QStringLiteral("-force_key_frames") << QStringLiteral("expr:gte(t,n_forced*1)");
     if (includeNativeAudio) {
         args << QStringLiteral("-map") << QStringLiteral("%1:a:0").arg(nativeAudioInputIndex)
@@ -854,6 +882,23 @@ QStringList PortableSegmentRecorder::segmentFiles() const {
     files.removeDuplicates();
     std::sort(files.begin(), files.end());
     return files;
+}
+
+void PortableSegmentRecorder::discardIncompleteCaptureSegment() {
+    const QStringList files = segmentFiles();
+    if (files.isEmpty()) {
+        return;
+    }
+    const QString newest = files.last();
+    if (snapshotReferences_.contains(newest)) {
+        return;
+    }
+    const auto cached = ramSegments_.find(newest);
+    if (cached != ramSegments_.end()) {
+        ramSegmentBytes_ -= cached.value().size();
+        ramSegments_.erase(cached);
+    }
+    QFile::remove(newest);
 }
 
 void PortableSegmentRecorder::promoteClosedSegmentsToRam() {
@@ -1238,6 +1283,15 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
     connect(captureProcess_, &QProcess::errorOccurred, this, &PortableSegmentRecorder::processError);
     captureProcess_->start(ffmpegPath_, captureArguments(withAudio));
     if (!captureProcess_->waitForStarted(3000)) {
+        if (gpuScalerActive_) {
+            gpuScalerActive_ = false;
+            gpuScalerCudaAvailable_ = false;
+            emit message(QStringLiteral("CUDA scaler не запустился; использую worker/software scaler."));
+            captureProcess_->deleteLater();
+            captureProcess_ = nullptr;
+            startProcess(withAudio, announceStarted);
+            return;
+        }
 #if defined(Q_OS_WIN)
         if (useNativeAudio_) {
             nativeAudio_->stop();

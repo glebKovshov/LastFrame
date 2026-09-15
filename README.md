@@ -59,6 +59,8 @@ Portable Windows ZIP собирается воспроизводимым скр�
   красный — ошибка;
 - асинхронная capability-проверка FFmpeg до старта буфера с понятным списком capture/audio/encoder возможностей;
 - предупреждения до запуска, если capability probe ещё не завершён, выбранный encoder/VP9/WASAPI недоступен или FPS выше частоты монитора;
+- при подтверждённом FFmpeg `scale_cuda` и NVENC масштабирование пробует CUDA-путь,
+  а при сбое безопасно удаляет незавершённый сегмент и возвращается к worker/software scaler;
 - глобальные хоткеи по умолчанию `Ctrl+Shift+F10`, `Ctrl+Shift+F1`, `Ctrl+Shift+F7`, `Ctrl+Shift+F5`;
 - JSON-настройки с миграционной точкой и сохранением неизвестных полей;
 - bounded queues, rate limit 3 сохранения в секунду и cooldown 5 секунд;

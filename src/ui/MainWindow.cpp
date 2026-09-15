@@ -426,6 +426,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&capabilityProbe_, &Platform::FfmpegCapabilityProbe::finished, this,
             [this](const Platform::FfmpegCapabilities& capabilities) {
                 capabilities_ = capabilities;
+                recorder_.setGpuScalerCapability(capabilities.scaleCuda);
                 if (!capabilities.available) {
                     capabilitySummary_ = QStringLiteral("FFmpeg не найден. Положите ffmpeg.exe рядом с LastFrame.exe или добавьте его в PATH.");
                 } else {
@@ -450,6 +451,9 @@ MainWindow::MainWindow(QWidget* parent)
                     }
                     if (capabilities.vp9) {
                         encoderList << QStringLiteral("VP9");
+                    }
+                    if (capabilities.scaleCuda) {
+                        encoderList << QStringLiteral("CUDA scaler");
                     }
                     QStringList audioList;
                     if (capabilities.wasapi) {

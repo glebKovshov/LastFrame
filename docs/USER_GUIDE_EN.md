@@ -18,6 +18,8 @@ Clips are saved to `Videos/LastFrame` by default. A final file is exposed only a
 
 Before starting the buffer, Capture/Video show capability warnings when the FFmpeg probe is still pending, a selected encoder or VP9 is unavailable, WASAPI is missing, or FPS exceeds the monitor refresh rate. Automatic fallback remains visible instead of being hidden.
 
+When the capability probe confirms `scale_cuda` and NVENC, LastFrame attempts GPU scaling. If the driver cannot start the filter, the incomplete segment is removed and capture continues through the regular worker/software scaler.
+
 ## Privacy and updates
 
 Capture, audio, clips, and diagnostics stay local. There is no telemetry. Update checks are manual and use the GitHub Releases API only when requested.

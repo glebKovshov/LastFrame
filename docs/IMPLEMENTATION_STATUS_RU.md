@@ -63,6 +63,9 @@
 - До запуска буфера Capture/Video показывают предупреждения capability: незавершённая
   проверка, недоступный ручной encoder/VP9, отсутствие WASAPI и FPS выше частоты
   выбранного монитора; fallback остаётся явным и диагностируемым.
+- При наличии `scale_cuda` и NVENC recorder пробует GPU scaling через FFmpeg filter;
+  если CUDA-устройство или filter не стартуют, незавершённый segment удаляется,
+  запись продолжается через worker/software scaler без битого export.
 - Добавлен отдельный `lastframe_notification_overlay_smoke`: на Windows он
   показывает overlay и проверяет `GetWindowDisplayAffinity == WDA_EXCLUDEFROMCAPTURE`.
 - Первый запуск показывает Auto-профиль, ограничивает FPS частотой доступного монитора
@@ -104,7 +107,8 @@
 
 1. Интеграционная проверка исключения overlay на каждом capture backend'е и
    тесты DRM/HDR capability states; Windows display-affinity smoke уже добавлен.
-2. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
+2. GPU scaler для QSV/VAAPI/VideoToolbox и прямой FFmpeg library encoder/muxer
+   вместо процесса FFmpeg; CUDA-путь с безопасным CPU fallback уже реализован.
 3. Завершить ручную матрицу DPI для нескольких Windows-мониторов и native
    macOS ScreenCaptureKit/Linux PipeWire/portal backends.
 4. Интеграционные тесты на RTX 3070 и полная матрица Windows/Linux/macOS arm64.

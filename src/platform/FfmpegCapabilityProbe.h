@@ -11,6 +11,10 @@ struct FfmpegCapabilities {
     bool available = false;
     bool desktopDuplication = false;
     bool gdiCapture = false;
+    bool scaleCuda = false;
+    bool scaleQsv = false;
+    bool scaleVaapi = false;
+    bool scaleVulkan = false;
     bool directShow = false;
     bool wasapi = false;
     bool nvencH264 = false;

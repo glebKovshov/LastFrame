@@ -43,6 +43,7 @@ int main(int argc, char* argv[]) {
     }
 
     LastFrame::Media::PortableSegmentRecorder recorder;
+    recorder.setGpuScalerCapability(qEnvironmentVariable("LASTFRAME_SMOKE_GPU_SCALER") == QStringLiteral("1"));
     bool success = false;
     std::set<QString> savedPaths;
     QObject::connect(&recorder, &LastFrame::Media::PortableSegmentRecorder::started,
