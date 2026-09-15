@@ -72,6 +72,8 @@ if(LASTFRAME_BUILD_UI)
             src/platform/MonitorEnumerator.cpp
             src/platform/Diagnostics.cpp
             src/platform/Diagnostics.h
+            src/platform/FfmpegCapabilityProbe.cpp
+            src/platform/FfmpegCapabilityProbe.h
             src/platform/UpdateChecker.cpp
             src/platform/UpdateChecker.h
             src/media/PortableSegmentRecorder.cpp
@@ -118,6 +120,14 @@ if(LASTFRAME_BUILD_UI)
             )
             # This test captures the real desktop and is intentionally kept
             # as a manual target, not registered in CTest/CI.
+
+            qt_add_executable(lastframe_capability_smoke
+                tests/capability_probe_smoke.cpp
+                src/platform/FfmpegCapabilityProbe.cpp
+                src/platform/FfmpegCapabilityProbe.h
+            )
+            target_include_directories(lastframe_capability_smoke PRIVATE src)
+            target_link_libraries(lastframe_capability_smoke PRIVATE Qt6::Core)
         endif()
     else()
         message(WARNING "Qt 6.8+ was not found; the core and tests will still be configured, but LastFrame UI is skipped.")

@@ -5,6 +5,7 @@
 #include "platform/GlobalHotkeyManager.h"
 #include "platform/MonitorEnumerator.h"
 #include "platform/Diagnostics.h"
+#include "platform/FfmpegCapabilityProbe.h"
 #include "platform/UpdateChecker.h"
 
 #include <QMainWindow>
@@ -81,6 +82,7 @@ private:
     LastFrame::Media::PortableSegmentRecorder recorder_;
     LastFrame::Platform::GlobalHotkeyManager hotkeys_;
     LastFrame::Platform::UpdateChecker updater_;
+    LastFrame::Platform::FfmpegCapabilityProbe capabilityProbe_;
     QVector<LastFrame::Platform::MonitorInfo> monitors_;
 
     QStackedWidget* pages_ = nullptr;
@@ -113,6 +115,7 @@ private:
     QString monitorSignature_;
     QUrl latestReleaseUrl_;
     QString lastSavedPath_;
+    QString capabilitySummary_;
     bool monitorSignatureInitialized_ = false;
     bool forceQuit_ = false;
     bool settingsRecovered_ = false;

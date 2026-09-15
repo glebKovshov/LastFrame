@@ -48,6 +48,7 @@ Portable Windows ZIP собирается воспроизводимым скр�
 - Auto/H.264 NVENC/software H.264/VP9 profiles, bitrate и лимит размера файла;
 - автоматический переход с недоступного NVENC на software H.264;
 - системный трей, старт/пауза/стоп/очистка/сохранение;
+- асинхронная capability-проверка FFmpeg до старта буфера с понятным списком capture/audio/encoder возможностей;
 - глобальные хоткеи по умолчанию `Ctrl+Shift+F10`, `Ctrl+Shift+F1`, `Ctrl+Shift+F7`, `Ctrl+Shift+F5`;
 - JSON-настройки с миграционной точкой и сохранением неизвестных полей;
 - bounded queues, rate limit 3 сохранения в секунду и cooldown 5 секунд;

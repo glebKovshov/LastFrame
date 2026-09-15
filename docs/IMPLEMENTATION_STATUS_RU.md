@@ -27,6 +27,8 @@
   выбор устройства, независимая громкость и fallback system → microphone → video.
 - Encoder fallback: при ошибке Auto/NVENC повторяется запуск с software H.264.
 - Ручная проверка GitHub Releases через `api.github.com`, без фоновой телеметрии или автообновления.
+- Асинхронный FFmpeg capability probe в Advanced: Desktop Duplication/GDI,
+  audio devices и доступные encoder profiles отображаются до запуска буфера.
 - Редактор глобальных хоткеев с проверкой дубликатов и откатом при конфликте регистрации.
 - Наблюдатель мониторов с интервалом 500 ms: активный буфер безопасно останавливается при изменении дисплея.
 - GitHub Actions для core tests и Windows portable artifact.

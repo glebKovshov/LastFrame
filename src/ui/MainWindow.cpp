@@ -63,6 +63,11 @@ QWidget* card(const QString& title, const QString& body, QWidget* parent = nullp
     return box;
 }
 
+QString locateFfmpegForUi() {
+    const QString adjacent = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ffmpeg.exe"));
+    return QFileInfo::exists(adjacent) ? adjacent : QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent)
@@ -106,6 +111,41 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&updater_, &Platform::UpdateChecker::noRelease, this,
             [this] { showToast(QStringLiteral("Опубликованных releases пока нет.")); });
     connect(&updater_, &Platform::UpdateChecker::error, this, &MainWindow::showRecorderError);
+    connect(&capabilityProbe_, &Platform::FfmpegCapabilityProbe::finished, this,
+            [this](const Platform::FfmpegCapabilities& capabilities) {
+                if (!capabilities.available) {
+                    capabilitySummary_ = QStringLiteral("FFmpeg не найден. Положите ffmpeg.exe рядом с LastFrame.exe или добавьте его в PATH.");
+                } else {
+                    const QString capture = capabilities.desktopDuplication ? QStringLiteral("Desktop Duplication")
+                                                                             : capabilities.gdiCapture ? QStringLiteral("GDI fallback")
+                                                                                                       : QStringLiteral("capture backend не найден");
+                    QStringList encoderList;
+                    if (capabilities.nvencH264) {
+                        encoderList << QStringLiteral("NVENC H.264");
+                    }
+                    if (capabilities.softwareH264) {
+                        encoderList << QStringLiteral("software H.264");
+                    }
+                    if (capabilities.vp9) {
+                        encoderList << QStringLiteral("VP9");
+                    }
+                    QStringList audioList;
+                    if (capabilities.wasapi) {
+                        audioList << QStringLiteral("WASAPI");
+                    }
+                    if (capabilities.directShow) {
+                        audioList << QStringLiteral("DirectShow mic");
+                    }
+                    const QString encoders = encoderList.join(QStringLiteral(", "));
+                    const QString audio = audioList.join(QStringLiteral(", "));
+                    capabilitySummary_ = QStringLiteral("FFmpeg: %1\nCapture: %2\nEncoders: %3\nAudio: %4")
+                                             .arg(capabilities.version.isEmpty() ? QStringLiteral("доступен") : capabilities.version,
+                                                  capture, encoders.isEmpty() ? QStringLiteral("нет") : encoders,
+                                                  audio.isEmpty() ? QStringLiteral("нет") : audio);
+                }
+                applyRecorderState();
+            });
+    capabilityProbe_.probe(locateFfmpegForUi());
     monitorTimer_.setInterval(500);
     connect(&monitorTimer_, &QTimer::timeout, this, &MainWindow::refreshMonitors);
     monitorTimer_.start();
@@ -376,9 +416,7 @@ QWidget* MainWindow::buildAudioPage() {
     microphoneCheck_->setChecked(settings_.audio.microphoneEnabled);
     form->addRow(QStringLiteral("Системный звук"), systemAudioCheck_);
     form->addRow(QStringLiteral("Микрофон"), microphoneCheck_);
-    const QString adjacentFfmpeg = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ffmpeg.exe"));
-    const QString ffmpegPath = QFileInfo::exists(adjacentFfmpeg) ? adjacentFfmpeg
-                                                                  : QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+    const QString ffmpegPath = locateFfmpegForUi();
     auto* systemDeviceCombo = new QComboBox(page);
     systemDeviceCombo->addItem(QStringLiteral("Auto"), QStringLiteral("auto"));
     for (const auto& device : Platform::AudioDeviceEnumerator::systemOutputs(ffmpegPath)) {
@@ -506,7 +544,7 @@ QWidget* MainWindow::buildAdvancedPage() {
     themeCombo_->addItems({QStringLiteral("Тёмная"), QStringLiteral("Светлая")});
     form->addRow(QStringLiteral("Тема"), themeCombo_);
     layout->addLayout(form);
-    ffmpegLabel_ = new QLabel(QStringLiteral("FFmpeg: поиск при старте буфера"), page);
+    ffmpegLabel_ = new QLabel(QStringLiteral("FFmpeg: проверка capability…"), page);
     ffmpegLabel_->setWordWrap(true);
     layout->addWidget(ffmpegLabel_);
     updateButton_ = new QPushButton(QStringLiteral("Проверить обновления"), page);
@@ -730,9 +768,12 @@ void MainWindow::applyRecorderState() {
     statusDetails_->setText(paused ? QStringLiteral("Новые кадры временно не поступают; накопленные сегменты доступны для сохранения.")
                              : active ? QStringLiteral("Захват идёт для монитора %1.").arg(monitorCombo_->currentText())
                                      : QStringLiteral("Нажмите «Начать буфер», чтобы начать захват."));
-    if (!recorder_.ffmpegPath().isEmpty() && ffmpegLabel_ != nullptr) {
-        ffmpegLabel_->setText(QStringLiteral("FFmpeg: %1\nКаталог сегментов: %2")
-                                  .arg(recorder_.ffmpegPath(), recorder_.temporaryDirectory()));
+    if (ffmpegLabel_ != nullptr) {
+        QString details = capabilitySummary_.isEmpty() ? QStringLiteral("FFmpeg: поиск capability при старте") : capabilitySummary_;
+        if (!recorder_.ffmpegPath().isEmpty()) {
+            details += QStringLiteral("\nКаталог сегментов: %1").arg(recorder_.temporaryDirectory());
+        }
+        ffmpegLabel_->setText(details);
     }
 }
 

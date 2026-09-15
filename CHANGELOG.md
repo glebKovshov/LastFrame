@@ -10,6 +10,7 @@
 - Added manual GitHub Releases update check, editable global hotkeys and monitor-change watcher.
 - Added microphone device discovery through DirectShow, system/microphone volume controls and audio fallback chain.
 - Added automatic NVENC to software H.264 encoder fallback.
+- Added asynchronous FFmpeg capability diagnostics before starting the buffer.
 
 ## 0.1.0 — Windows MVP
 
