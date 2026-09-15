@@ -68,6 +68,8 @@ if(LASTFRAME_BUILD_UI)
             src/app/main.cpp
             src/platform/GlobalHotkeyManager.cpp
             src/platform/MonitorEnumerator.cpp
+            src/platform/UpdateChecker.cpp
+            src/platform/UpdateChecker.h
             src/media/PortableSegmentRecorder.cpp
             src/ui/MainWindow.cpp
             src/ui/MainWindow.h

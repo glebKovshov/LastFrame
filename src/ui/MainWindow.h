@@ -4,8 +4,11 @@
 #include "media/PortableSegmentRecorder.h"
 #include "platform/GlobalHotkeyManager.h"
 #include "platform/MonitorEnumerator.h"
+#include "platform/UpdateChecker.h"
 
 #include <QMainWindow>
+#include <QTimer>
+#include <QUrl>
 
 #include <filesystem>
 
@@ -40,6 +43,7 @@ private slots:
     void saveClip();
     void clearBuffer();
     void chooseRegion();
+    void checkForUpdates();
     void refreshMonitors();
     void chooseTheme(int index);
     void handleHotkey(LastFrame::Platform::HotkeyAction action);
@@ -74,6 +78,7 @@ private:
     LastFrame::Core::SettingsStore settingsStore_;
     LastFrame::Media::PortableSegmentRecorder recorder_;
     LastFrame::Platform::GlobalHotkeyManager hotkeys_;
+    LastFrame::Platform::UpdateChecker updater_;
     QVector<LastFrame::Platform::MonitorInfo> monitors_;
 
     QStackedWidget* pages_ = nullptr;
@@ -99,7 +104,12 @@ private:
     QComboBox* themeCombo_ = nullptr;
     QCheckBox* systemAudioCheck_ = nullptr;
     QCheckBox* microphoneCheck_ = nullptr;
+    QPushButton* updateButton_ = nullptr;
     QSystemTrayIcon* tray_ = nullptr;
+    QTimer monitorTimer_;
+    QString monitorSignature_;
+    QUrl latestReleaseUrl_;
+    bool monitorSignatureInitialized_ = false;
     bool forceQuit_ = false;
     bool settingsRecovered_ = false;
 };

@@ -6,6 +6,7 @@
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDir>
+#include <QDesktopServices>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -13,9 +14,11 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSet>
 #include <QSlider>
 #include <QSpinBox>
 #include <QSignalBlocker>
@@ -88,6 +91,20 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&recorder_, &Media::PortableSegmentRecorder::clipSaved, this, &MainWindow::onClipSaved);
     connect(&hotkeys_, &Platform::GlobalHotkeyManager::activated, this, &MainWindow::handleHotkey);
     connect(&hotkeys_, &Platform::GlobalHotkeyManager::registrationError, this, &MainWindow::showRecorderError);
+    connect(&updater_, &Platform::UpdateChecker::updateAvailable, this,
+            [this](const QString& version, const QUrl& url) {
+                latestReleaseUrl_ = url;
+                updateButton_->setText(QStringLiteral("Открыть %1").arg(version));
+                showToast(QStringLiteral("Доступна новая версия %1.").arg(version));
+            });
+    connect(&updater_, &Platform::UpdateChecker::upToDate, this,
+            [this] { showToast(QStringLiteral("Установлена актуальная версия.")); });
+    connect(&updater_, &Platform::UpdateChecker::noRelease, this,
+            [this] { showToast(QStringLiteral("Опубликованных releases пока нет.")); });
+    connect(&updater_, &Platform::UpdateChecker::error, this, &MainWindow::showRecorderError);
+    monitorTimer_.setInterval(500);
+    connect(&monitorTimer_, &QTimer::timeout, this, &MainWindow::refreshMonitors);
+    monitorTimer_.start();
     applyRecorderState();
 }
 
@@ -278,8 +295,7 @@ QWidget* MainWindow::buildVideoPage() {
     presetCombo_ = new QComboBox(page);
     presetCombo_->addItems({QStringLiteral("Low"), QStringLiteral("Medium"), QStringLiteral("High"),
                             QStringLiteral("Ultra"), QStringLiteral("Custom")});
-    const int presetIndex = presetCombo_->findText(QString::fromStdString(settings_.video.preset),
-                                                   Qt::MatchFixedString | Qt::MatchCaseInsensitive);
+    const int presetIndex = presetCombo_->findText(QString::fromStdString(settings_.video.preset), Qt::MatchFixedString);
     presetCombo_->setCurrentIndex(presetIndex >= 0 ? presetIndex : 2);
     form->addRow(QStringLiteral("Пресет"), presetCombo_);
     bitrateSpin_ = new QSpinBox(page);
@@ -369,14 +385,51 @@ QWidget* MainWindow::buildHotkeysPage() {
     layout->addWidget(heading(QStringLiteral("Hotkeys"), page));
     layout->addWidget(description(QStringLiteral("Глобальные комбинации работают поверх игры и проверяются до регистрации."), page));
     auto* table = new QFormLayout;
-    table->addRow(QStringLiteral("Сохранить"), new QLabel(QString::fromStdString(settings_.hotkeys.save), page));
-    table->addRow(QStringLiteral("Очистить"), new QLabel(QString::fromStdString(settings_.hotkeys.clear), page));
-    table->addRow(QStringLiteral("Пауза"), new QLabel(QString::fromStdString(settings_.hotkeys.pause), page));
-    table->addRow(QStringLiteral("Старт/стоп"), new QLabel(QString::fromStdString(settings_.hotkeys.toggleCapture), page));
-    table->addRow(QStringLiteral("Mute microphone"), new QLabel(settings_.hotkeys.muteMicrophone.empty() ? QStringLiteral("Не назначен") : QString::fromStdString(settings_.hotkeys.muteMicrophone), page));
+    auto* saveEdit = new QLineEdit(QString::fromStdString(settings_.hotkeys.save), page);
+    auto* clearEdit = new QLineEdit(QString::fromStdString(settings_.hotkeys.clear), page);
+    auto* pauseEdit = new QLineEdit(QString::fromStdString(settings_.hotkeys.pause), page);
+    auto* toggleEdit = new QLineEdit(QString::fromStdString(settings_.hotkeys.toggleCapture), page);
+    auto* muteEdit = new QLineEdit(QString::fromStdString(settings_.hotkeys.muteMicrophone), page);
+    table->addRow(QStringLiteral("Сохранить"), saveEdit);
+    table->addRow(QStringLiteral("Очистить"), clearEdit);
+    table->addRow(QStringLiteral("Пауза"), pauseEdit);
+    table->addRow(QStringLiteral("Старт/стоп"), toggleEdit);
+    table->addRow(QStringLiteral("Mute microphone"), muteEdit);
     layout->addLayout(table);
-    layout->addWidget(description(QStringLiteral("Редактор комбинаций будет добавлен после завершения native hotkey conflict UI."), page));
+    auto* apply = new QPushButton(QStringLiteral("Применить хоткеи"), page);
+    layout->addWidget(apply);
+    layout->addWidget(description(QStringLiteral("Формат: Ctrl+Shift+F10. Пустое поле отключает действие; одинаковые комбинации запрещены."), page));
     layout->addStretch();
+    connect(apply, &QPushButton::clicked, this, [this, saveEdit, clearEdit, pauseEdit, toggleEdit, muteEdit] {
+        const QStringList values{saveEdit->text().trimmed(), clearEdit->text().trimmed(), pauseEdit->text().trimmed(),
+                                 toggleEdit->text().trimmed(), muteEdit->text().trimmed()};
+        QSet<QString> unique;
+        for (const QString& value : values) {
+            if (!value.isEmpty() && unique.contains(value.toLower())) {
+                showToast(QStringLiteral("Одинаковые хоткеи использовать нельзя."), true);
+                return;
+            }
+            if (!value.isEmpty()) {
+                unique.insert(value.toLower());
+            }
+        }
+        const Core::HotkeySettings previous = settings_.hotkeys;
+        settings_.hotkeys.save = saveEdit->text().trimmed().toStdString();
+        settings_.hotkeys.clear = clearEdit->text().trimmed().toStdString();
+        settings_.hotkeys.pause = pauseEdit->text().trimmed().toStdString();
+        settings_.hotkeys.toggleCapture = toggleEdit->text().trimmed().toStdString();
+        settings_.hotkeys.muteMicrophone = muteEdit->text().trimmed().toStdString();
+        if (!hotkeys_.registerHotkeys(QString::fromStdString(settings_.hotkeys.save),
+                                      QString::fromStdString(settings_.hotkeys.clear),
+                                      QString::fromStdString(settings_.hotkeys.pause),
+                                      QString::fromStdString(settings_.hotkeys.toggleCapture),
+                                      QString::fromStdString(settings_.hotkeys.muteMicrophone))) {
+            settings_.hotkeys = previous;
+            showToast(QStringLiteral("Не удалось зарегистрировать хоткеи; настройки откатились."), true);
+            return;
+        }
+        showToast(QStringLiteral("Хоткеи применены."));
+    });
     return page;
 }
 
@@ -414,10 +467,13 @@ QWidget* MainWindow::buildAdvancedPage() {
     ffmpegLabel_ = new QLabel(QStringLiteral("FFmpeg: поиск при старте буфера"), page);
     ffmpegLabel_->setWordWrap(true);
     layout->addWidget(ffmpegLabel_);
+    updateButton_ = new QPushButton(QStringLiteral("Проверить обновления"), page);
+    layout->addWidget(updateButton_);
     layout->addWidget(description(QStringLiteral("Телеметрия отключена. Проверка обновлений будет ручной через GitHub Releases и по умолчанию отключена."), page));
     layout->addStretch();
     connect(durationSpin_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) { settings_.buffer.durationSeconds = value; });
     connect(themeCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::chooseTheme);
+    connect(updateButton_, &QPushButton::clicked, this, &MainWindow::checkForUpdates);
     return page;
 }
 
@@ -503,7 +559,45 @@ void MainWindow::chooseRegion() {
                                .arg(selection.y()));
 }
 
+void MainWindow::checkForUpdates() {
+    if (!latestReleaseUrl_.isEmpty()) {
+        QDesktopServices::openUrl(latestReleaseUrl_);
+        return;
+    }
+    updateButton_->setEnabled(false);
+    updateButton_->setText(QStringLiteral("Проверка…"));
+    connect(&updater_, &Platform::UpdateChecker::upToDate, this, [this] {
+        updateButton_->setEnabled(true);
+        updateButton_->setText(QStringLiteral("Проверить обновления"));
+    }, Qt::SingleShotConnection);
+    connect(&updater_, &Platform::UpdateChecker::noRelease, this, [this] {
+        updateButton_->setEnabled(true);
+        updateButton_->setText(QStringLiteral("Проверить обновления"));
+    }, Qt::SingleShotConnection);
+    connect(&updater_, &Platform::UpdateChecker::error, this, [this] {
+        updateButton_->setEnabled(true);
+        updateButton_->setText(QStringLiteral("Проверить обновления"));
+    }, Qt::SingleShotConnection);
+    connect(&updater_, &Platform::UpdateChecker::updateAvailable, this, [this] {
+        updateButton_->setEnabled(true);
+    }, Qt::SingleShotConnection);
+    updater_.check();
+}
+
 void MainWindow::refreshMonitors() {
+    const auto detected = Platform::MonitorEnumerator::enumerate();
+    QString signature;
+    for (const auto& monitor : detected) {
+        signature += monitor.id + QStringLiteral("|") + QString::number(monitor.refreshRate) + QStringLiteral(";");
+    }
+    const bool changed = monitorSignatureInitialized_ && signature != monitorSignature_;
+    monitorSignature_ = signature;
+    monitorSignatureInitialized_ = true;
+    monitors_ = detected;
+    if (changed && recorder_.isRecording()) {
+        recorder_.stop();
+        showToast(QStringLiteral("Монитор или его режим изменился. Буфер остановлен; проверьте настройки и запустите снова."), true);
+    }
     populateMonitorCombo();
 }
 
@@ -649,7 +743,6 @@ void MainWindow::populateMonitorCombo() {
     if (monitorCombo_ == nullptr) {
         return;
     }
-    monitors_ = Platform::MonitorEnumerator::enumerate();
     monitorCombo_->clear();
     for (const auto& monitor : monitors_) {
         monitorCombo_->addItem(QStringLiteral("%1 — %2x%3 @ %4 Hz")

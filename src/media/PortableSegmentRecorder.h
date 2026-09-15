@@ -73,6 +73,8 @@ private:
     bool paused_ = false;
     bool attemptedVideoOnlyFallback_ = false;
     bool processHasAudio_ = true;
+    bool useDesktopDuplication_ = true;
+    bool attemptedDesktopDuplicationFallback_ = false;
     LastFrame::Core::RateLimiter rateLimiter_{3, std::chrono::seconds(1), std::chrono::seconds(5)};
     QList<ExportJob*> exports_;
 };

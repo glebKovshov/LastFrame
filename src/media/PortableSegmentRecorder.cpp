@@ -62,6 +62,8 @@ void PortableSegmentRecorder::start(const LastFrame::Core::Settings& settings) {
         QFile::remove(file.absoluteFilePath());
     }
     attemptedVideoOnlyFallback_ = false;
+    useDesktopDuplication_ = true;
+    attemptedDesktopDuplicationFallback_ = false;
     paused_ = false;
     startProcess(true);
 }
@@ -249,6 +251,13 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
         startProcess(false, false);
         return;
     }
+    if (recording_ && exitCode != 0 && useDesktopDuplication_ && !attemptedDesktopDuplicationFallback_) {
+        attemptedDesktopDuplicationFallback_ = true;
+        useDesktopDuplication_ = false;
+        emit message(QStringLiteral("Desktop Duplication недоступен; использую совместимый GDI-захват."));
+        startProcess(processHasAudio_, false);
+        return;
+    }
     if (recording_ && exitCode != 0) {
         const QString details = captureProcess_ == nullptr ? QString() : QString::fromLocal8Bit(captureProcess_->readAll());
         emit error(QStringLiteral("Захват завершился с ошибкой: %1").arg(details.left(300)));
@@ -299,20 +308,29 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
     }
     const int outputWidth = settings_.capture.outputWidth > 0 ? settings_.capture.outputWidth : captureRect.width();
     const int outputHeight = settings_.capture.outputHeight > 0 ? settings_.capture.outputHeight : captureRect.height();
-    // The first portable MVP uses gdigrab because it is available in the
-    // redistributable FFmpeg build and works on the current Windows test host.
-    // DXGI Desktop Duplication / Windows Graphics Capture will replace this
-    // process adapter in the native capture slice without changing the UI.
-    QStringList args{
-        QStringLiteral("-hide_banner"), QStringLiteral("-loglevel"), QStringLiteral("warning"),
-        QStringLiteral("-y"), QStringLiteral("-f"), QStringLiteral("gdigrab"),
-        QStringLiteral("-framerate"), QString::number(fps),
-        QStringLiteral("-draw_mouse"), settings_.capture.showCursor ? QStringLiteral("1") : QStringLiteral("0"),
-        QStringLiteral("-offset_x"), QString::number(captureRect.x()),
-        QStringLiteral("-offset_y"), QString::number(captureRect.y()),
-        QStringLiteral("-video_size"), QStringLiteral("%1x%2").arg(captureRect.width()).arg(captureRect.height()),
-        QStringLiteral("-i"), QStringLiteral("desktop"),
-    };
+    const int localOffsetX = captureRect.x() - monitor.geometry.x();
+    const int localOffsetY = captureRect.y() - monitor.geometry.y();
+    QStringList args{QStringLiteral("-hide_banner"), QStringLiteral("-loglevel"), QStringLiteral("warning"),
+                     QStringLiteral("-y")};
+    if (useDesktopDuplication_) {
+        const QString filter = QStringLiteral("ddagrab=output_idx=%1:draw_mouse=%2:framerate=%3:video_size=%4x%5:offset_x=%6:offset_y=%7:output_fmt=bgra")
+                                   .arg(std::max(0, monitorIndex))
+                                   .arg(settings_.capture.showCursor ? 1 : 0)
+                                   .arg(fps)
+                                   .arg(captureRect.width())
+                                   .arg(captureRect.height())
+                                   .arg(localOffsetX)
+                                   .arg(localOffsetY);
+        args << QStringLiteral("-f") << QStringLiteral("lavfi") << QStringLiteral("-i") << filter;
+    } else {
+        args << QStringLiteral("-f") << QStringLiteral("gdigrab") << QStringLiteral("-framerate")
+             << QString::number(fps) << QStringLiteral("-draw_mouse")
+             << (settings_.capture.showCursor ? QStringLiteral("1") : QStringLiteral("0"))
+             << QStringLiteral("-offset_x") << QString::number(captureRect.x()) << QStringLiteral("-offset_y")
+             << QString::number(captureRect.y()) << QStringLiteral("-video_size")
+             << QStringLiteral("%1x%2").arg(captureRect.width()).arg(captureRect.height()) << QStringLiteral("-i")
+             << QStringLiteral("desktop");
+    }
     if (withAudio && settings_.audio.systemEnabled) {
         args << QStringLiteral("-thread_queue_size") << QStringLiteral("512")
              << QStringLiteral("-f") << QStringLiteral("wasapi")
@@ -341,7 +359,10 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
                         : preset == QStringLiteral("medium") ? 10000
                         : preset == QStringLiteral("ultra")  ? 24000
                         : settings_.video.customBitrateKbps;
-    args << QStringLiteral("-vf") << QStringLiteral("scale=%1:%2:flags=lanczos").arg(outputWidth).arg(outputHeight)
+    const QString videoFilter = useDesktopDuplication_
+                                    ? QStringLiteral("hwdownload,format=bgra,scale=%1:%2:flags=lanczos")
+                                    : QStringLiteral("scale=%1:%2:flags=lanczos");
+    args << QStringLiteral("-vf") << videoFilter.arg(outputWidth).arg(outputHeight)
          << QStringLiteral("-c:v") << codec
          << QStringLiteral("-b:v") << QStringLiteral("%1k").arg(bitrate);
     if (codec == QStringLiteral("h264_nvenc")) {
@@ -431,9 +452,17 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
     connect(captureProcess_, &QProcess::errorOccurred, this, &PortableSegmentRecorder::processError);
     captureProcess_->start(ffmpegPath_, captureArguments(withAudio));
     if (!captureProcess_->waitForStarted(3000)) {
+        const bool canFallbackToGdi = useDesktopDuplication_ && !attemptedDesktopDuplicationFallback_;
         emit error(QStringLiteral("FFmpeg не запустился для монитора %1.").arg(selectedMonitorLabel()));
         captureProcess_->deleteLater();
         captureProcess_ = nullptr;
+        if (canFallbackToGdi) {
+            attemptedDesktopDuplicationFallback_ = true;
+            useDesktopDuplication_ = false;
+            emit message(QStringLiteral("Desktop Duplication недоступен; использую совместимый GDI-захват."));
+            startProcess(withAudio, announceStarted);
+            return;
+        }
         recording_ = false;
         return;
     }

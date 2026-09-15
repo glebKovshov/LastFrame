@@ -6,6 +6,8 @@
 - Added output resolution, container, codec, preset, bitrate and file-size controls.
 - Added export queue limits, unique reservations for concurrent clips and stale-temp cleanup.
 - Added smoke coverage for region capture, audio fallback, concurrent saves and MP4/MKV/WebM.
+- Added Desktop Duplication capture through FFmpeg `ddagrab` with automatic GDI fallback.
+- Added manual GitHub Releases update check, editable global hotkeys and monitor-change watcher.
 
 ## 0.1.0 — Windows MVP
 

@@ -2,7 +2,7 @@
 
 LastFrame — локальная portable-утилита для сохранения последних секунд экрана по глобальному хоткею.
 
-Текущий этап — Windows MVP: окно настроек, кольцевой буферный core, системный трей и подготовленный сегментный recorder через FFmpeg. Приложение не отправляет кадры, звук или логи в облако.
+Текущий этап — Windows MVP: окно настроек, кольцевой буферный core, системный трей и сегментный recorder через FFmpeg. На совместимых Windows-сборках используется Desktop Duplication (`ddagrab`), с автоматическим GDI fallback. Приложение не отправляет кадры, звук или логи в облако.
 
 ## Быстрый старт
 
@@ -34,6 +34,7 @@ ctest --preset core-only
 
 - один выбранный монитор;
 - full-monitor и прямоугольный region capture через полноэкранный overlay;
+- Desktop Duplication через FFmpeg `ddagrab` с автоматическим GDI fallback;
 - независимые output width/height и постоянный FPS в пределах частоты монитора;
 - буфер последних 5–300 секунд, по умолчанию 30;
 - сохранение MP4/MKV/WebM через короткие MKV-сегменты и атомарное переименование результата;
@@ -48,7 +49,7 @@ ctest --preset core-only
 на Apple Silicon (включая M1). В текущем срезе полностью проверен Windows
 portable-путь; native macOS/Linux backends ещё не подключены.
 
-Нативные DXGI/Desktop Duplication, WASAPI-микшер и backend’ы macOS/Linux остаются следующими вертикальными срезами. В текущем MVP внешний FFmpeg используется как изолированный media backend; это позволяет проверить сценарий на реальном Windows-железе до подключения прямых FFmpeg libraries.
+Desktop Duplication уже включён через изолированный FFmpeg media backend `ddagrab`; при ошибке API автоматически используется `gdigrab`. Прямой C++ DXGI/WGC backend, полноценный WASAPI loopback + microphone mixer и backend’ы macOS/Linux остаются следующими вертикальными срезами. Такой адаптер позволяет проверять сценарий на реальном Windows-железе без привязки UI к media implementation.
 
 ## Публикация
 

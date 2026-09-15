@@ -22,12 +22,17 @@
 - Настраиваемые output width/height, FPS, контейнер MP4/MKV/WebM,
   encoder preset/bitrate и лимит размера файла.
 - Ограниченная очередь export jobs и резервирование имён при параллельных сохранениях.
+- Desktop Duplication через FFmpeg `ddagrab` с `hwdownload`/GPU desktop path и автоматическим GDI fallback.
+- Ручная проверка GitHub Releases через `api.github.com`, без фоновой телеметрии или автообновления.
+- Редактор глобальных хоткеев с проверкой дубликатов и откатом при конфликте регистрации.
+- Наблюдатель мониторов с интервалом 500 ms: активный буфер безопасно останавливается при изменении дисплея.
 - GitHub Actions для core tests и Windows portable artifact.
 
 ## Следующие обязательные срезы по ТЗ
 
-1. Прямой Windows capture backend: DXGI Desktop Duplication, затем Windows
-   Graphics Capture fallback; исключить зависимость capture от UI thread.
+1. Прямой C++ Windows capture backend: DXGI Desktop Duplication, затем Windows
+   Graphics Capture fallback; текущий portable backend уже использует FFmpeg
+   `ddagrab` (DXGI Desktop Duplication) и GDI fallback.
 2. WASAPI loopback + microphone capture, master clock и AudioMixer.
 3. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
 4. Region selector, DPI-aware coordinates, monitor watcher и overlay.
