@@ -79,6 +79,7 @@ private:
     void loadSettings();
     void saveSettings();
     void showToast(const QString& text, bool isError = false);
+    void updateTrayIcon();
     void setupTray();
     void registerHotkeys();
     void populateMonitorCombo();
@@ -134,6 +135,8 @@ private:
     bool monitorResumePending_ = false;
     bool forceQuit_ = false;
     bool settingsRecovered_ = false;
+    bool trayError_ = false;
+    bool trayWarning_ = false;
     bool lifecycleWasRecording_ = false;
     bool lifecycleSuspended_ = false;
 };

@@ -147,10 +147,14 @@ MainWindow::MainWindow(QWidget* parent)
     applyTheme(settings_.extras.value("theme", std::string("dark")) != "light");
 
     connect(&recorder_, &Media::PortableSegmentRecorder::started, this, [this] {
+        trayError_ = false;
+        trayWarning_ = false;
         showToast(QStringLiteral("Буфер запущен"));
         applyRecorderState();
     });
     connect(&recorder_, &Media::PortableSegmentRecorder::stopped, this, [this] {
+        trayError_ = false;
+        trayWarning_ = false;
         showToast(QStringLiteral("Буфер остановлен"));
         applyRecorderState();
     });
@@ -1083,6 +1087,7 @@ void MainWindow::handleHotkey(const Platform::HotkeyAction action) {
 
 void MainWindow::showRecorderError(const QString& text) {
     Platform::Diagnostics::append(QStringLiteral("ERROR"), text);
+    trayError_ = true;
     showToast(text, true);
     QMessageBox dialog(QMessageBox::Critical, QStringLiteral("LastFrame — ошибка"), text,
                        QMessageBox::NoButton, this);
@@ -1103,6 +1108,10 @@ void MainWindow::showRecorderError(const QString& text) {
 
 void MainWindow::showRecorderMessage(const QString& text) {
     Platform::Diagnostics::append(QStringLiteral("INFO"), text);
+    if (text.startsWith(QStringLiteral("[audio_device_lost]"))) {
+        trayWarning_ = true;
+        updateTrayIcon();
+    }
     showToast(text);
 }
 
@@ -1159,6 +1168,7 @@ void MainWindow::applyRecorderState() {
     statusDetails_->setText(paused ? QStringLiteral("Новые кадры временно не поступают; накопленные сегменты доступны для сохранения.")
                              : active ? QStringLiteral("Захват идёт для монитора %1.").arg(monitorCombo_->currentText())
                                      : QStringLiteral("Нажмите «Начать буфер», чтобы начать захват."));
+    updateTrayIcon();
     if (ffmpegLabel_ != nullptr) {
         QString details = capabilitySummary_.isEmpty() ? QStringLiteral("FFmpeg: поиск capability при старте") : capabilitySummary_;
         if (!recorder_.ffmpegPath().isEmpty()) {
@@ -1183,6 +1193,10 @@ void MainWindow::saveSettings() {
 }
 
 void MainWindow::showToast(const QString& text, const bool isError) {
+    if (isError) {
+        trayError_ = true;
+        updateTrayIcon();
+    }
     statusDetails_->setText(text);
     statusLabel_->setStyleSheet(isError ? QStringLiteral("color: #D94841;") : QStringLiteral("color: #ED760E;"));
     if (!settings_.notifications.enabled || !settings_.notifications.overlayEnabled) {
@@ -1208,13 +1222,7 @@ void MainWindow::showToast(const QString& text, const bool isError) {
 
 void MainWindow::setupTray() {
     tray_ = new QSystemTrayIcon(this);
-    QPixmap pixmap(32, 32);
-    pixmap.fill(Qt::transparent);
-    QPainter painter(&pixmap);
-    painter.setBrush(QColor(QString::fromLatin1(accent)));
-    painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(3, 3, 26, 26, 7, 7);
-    tray_->setIcon(QIcon(pixmap));
+    updateTrayIcon();
     tray_->setToolTip(QStringLiteral("LastFrame"));
     auto* menu = new QMenu(this);
     auto* save = menu->addAction(QStringLiteral("Сохранить клип"));
@@ -1258,6 +1266,23 @@ void MainWindow::setupTray() {
 #endif
     });
     tray_->show();
+}
+
+void MainWindow::updateTrayIcon() {
+    if (tray_ == nullptr) {
+        return;
+    }
+    const QColor color = trayError_ ? QColor(QStringLiteral("#D94841"))
+                                    : trayWarning_ || recorder_.isPaused() ? QColor(QStringLiteral("#E0A800"))
+                                    : recorder_.isRecording() ? QColor(QStringLiteral("#36B37E"))
+                                                              : QColor(QStringLiteral("#8A8A8A"));
+    QPixmap pixmap(32, 32);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setBrush(color);
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(3, 3, 26, 26, 7, 7);
+    tray_->setIcon(QIcon(pixmap));
 }
 
 void MainWindow::registerHotkeys() {
