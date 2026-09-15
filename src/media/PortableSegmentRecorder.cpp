@@ -388,6 +388,10 @@ void PortableSegmentRecorder::saveClip() {
     if (container == QStringLiteral("mp4")) {
         args << QStringLiteral("-movflags") << QStringLiteral("+faststart");
     }
+    const qint64 maxBytes = static_cast<qint64>(settings_.video.maxFileSizeMiB) * 1024 * 1024;
+    if (maxBytes > 0) {
+        args << QStringLiteral("-fs") << QString::number(maxBytes);
+    }
     args << QStringLiteral("-f")
          << (container == QStringLiteral("mkv") ? QStringLiteral("matroska") : container)
          << job->temporaryPath;
@@ -466,7 +470,9 @@ void PortableSegmentRecorder::processFinished(const int exitCode, const QProcess
     }
     if (recording_ && exitCode != 0 && !useSoftwareEncoder_ && !attemptedEncoderFallback_ &&
         (settings_.video.container != "webm") &&
-        (settings_.video.codec == "auto" || settings_.video.codec == "h264_nvenc")) {
+        (settings_.video.codec == "auto" || settings_.video.codec == "h264_nvenc" ||
+         settings_.video.codec == "h264_amf" || settings_.video.codec == "h264_qsv" ||
+         settings_.video.codec == "h264_videotoolbox")) {
         attemptedEncoderFallback_ = true;
         useSoftwareEncoder_ = true;
         emit message(QStringLiteral("Аппаратный H.264 недоступен; использую software fallback."));
@@ -619,8 +625,9 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
     if (container == QStringLiteral("webm") && codec != QStringLiteral("libvpx-vp9")) {
         codec = QStringLiteral("libvpx-vp9");
     }
-    if (codec != QStringLiteral("h264_nvenc") && codec != QStringLiteral("libx264") &&
-        codec != QStringLiteral("libvpx-vp9")) {
+    if (codec != QStringLiteral("h264_nvenc") && codec != QStringLiteral("h264_amf") &&
+        codec != QStringLiteral("h264_qsv") && codec != QStringLiteral("h264_videotoolbox") &&
+        codec != QStringLiteral("libx264") && codec != QStringLiteral("libvpx-vp9")) {
         codec = QStringLiteral("h264_nvenc");
     }
     QString preset = QString::fromStdString(settings_.video.preset).toLower();
@@ -643,7 +650,7 @@ QStringList PortableSegmentRecorder::captureArguments(const bool withAudio) cons
         args << QStringLiteral("-preset")
              << (preset == QStringLiteral("low") ? QStringLiteral("veryfast")
                  : preset == QStringLiteral("ultra") ? QStringLiteral("slow") : QStringLiteral("medium"));
-    } else {
+    } else if (codec == QStringLiteral("libvpx-vp9")) {
         args << QStringLiteral("-deadline") << QStringLiteral("good")
              << QStringLiteral("-cpu-used") << (preset == QStringLiteral("low") ? QStringLiteral("6")
                                                   : preset == QStringLiteral("ultra") ? QStringLiteral("2")
@@ -954,7 +961,9 @@ void PortableSegmentRecorder::startProcess(const bool withAudio, const bool anno
         }
         const bool canFallbackToSoftware = !useSoftwareEncoder_ && !attemptedEncoderFallback_ &&
                                            settings_.video.container != "webm" &&
-                                           (settings_.video.codec == "auto" || settings_.video.codec == "h264_nvenc");
+                                           (settings_.video.codec == "auto" || settings_.video.codec == "h264_nvenc" ||
+                                            settings_.video.codec == "h264_amf" || settings_.video.codec == "h264_qsv" ||
+                                            settings_.video.codec == "h264_videotoolbox");
         if (canFallbackToSoftware) {
             attemptedEncoderFallback_ = true;
             useSoftwareEncoder_ = true;

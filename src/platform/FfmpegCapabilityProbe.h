@@ -14,6 +14,9 @@ struct FfmpegCapabilities {
     bool directShow = false;
     bool wasapi = false;
     bool nvencH264 = false;
+    bool amfH264 = false;
+    bool qsvH264 = false;
+    bool videoToolboxH264 = false;
     bool softwareH264 = false;
     bool vp9 = false;
 };

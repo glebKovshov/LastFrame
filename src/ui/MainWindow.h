@@ -108,6 +108,7 @@ private:
     QComboBox* presetCombo_ = nullptr;
     QSpinBox* bitrateSpin_ = nullptr;
     QSpinBox* maxFileSizeSpin_ = nullptr;
+    QLabel* estimatedSizeLabel_ = nullptr;
     QComboBox* themeCombo_ = nullptr;
     QCheckBox* systemAudioCheck_ = nullptr;
     QCheckBox* microphoneCheck_ = nullptr;

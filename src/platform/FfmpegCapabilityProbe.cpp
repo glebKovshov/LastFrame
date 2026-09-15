@@ -94,6 +94,9 @@ void FfmpegCapabilityProbe::parseQueryOutput(const QString& output) {
         capabilities_.wasapi = output.contains(QStringLiteral("wasapi"));
     } else if (query == QStringLiteral("encoders")) {
         capabilities_.nvencH264 = output.contains(QStringLiteral("h264_nvenc"));
+        capabilities_.amfH264 = output.contains(QStringLiteral("h264_amf"));
+        capabilities_.qsvH264 = output.contains(QStringLiteral("h264_qsv"));
+        capabilities_.videoToolboxH264 = output.contains(QStringLiteral("h264_videotoolbox"));
         capabilities_.softwareH264 = output.contains(QStringLiteral("libx264"));
         capabilities_.vp9 = output.contains(QStringLiteral("libvpx-vp9"));
     }

@@ -33,6 +33,9 @@
 - Поиск аудиоустройств через FFmpeg: системный WASAPI output и микрофоны DirectShow,
   выбор устройства, независимая громкость и fallback system → microphone → video.
 - Encoder fallback: при ошибке Auto/NVENC повторяется запуск с software H.264.
+- Capability probe и UI учитывают H.264 backend'ы NVIDIA NVENC, AMD AMF, Intel
+  QSV и Apple VideoToolbox; экспорт показывает оценку размера и ограничивается
+  `maxFileSizeMiB` самим FFmpeg до атомарного rename.
 - Ошибки recorder/hotkey/update имеют стабильные технические коды для диагностики:
   `capture_failed`, `audio_device_lost`, `encoder_unavailable`, `export_failed`,
   `queue_overflow`, `hotkey_conflict`, `monitor_changed`.

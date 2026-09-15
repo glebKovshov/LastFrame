@@ -162,7 +162,9 @@ Settings Settings::fromJson(const nlohmann::json& json) {
     }
     settings.video.codec = readValue(video, "codec", settings.video.codec);
     if (settings.video.codec != "auto" && settings.video.codec != "h264_nvenc" &&
-        settings.video.codec != "libx264" && settings.video.codec != "libvpx-vp9") {
+        settings.video.codec != "h264_amf" && settings.video.codec != "h264_qsv" &&
+        settings.video.codec != "h264_videotoolbox" && settings.video.codec != "libx264" &&
+        settings.video.codec != "libvpx-vp9") {
         settings.video.codec = "auto";
     }
     settings.video.preset = readValue(video, "preset", settings.video.preset);

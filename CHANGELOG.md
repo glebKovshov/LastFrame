@@ -28,6 +28,8 @@
   falling back to the first display when a selected monitor is unavailable.
 - Added a Notifications settings page plus an in-app non-interactive toast overlay
   toggle; notification preferences are persisted in the existing JSON schema.
+- Added encoder capability entries for NVIDIA NVENC, AMD AMF, Intel QSV and Apple
+  VideoToolbox, plus an estimated export size and FFmpeg output-size guard.
 
 ## 0.1.0 — Windows MVP
 

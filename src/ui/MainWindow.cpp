@@ -136,6 +136,15 @@ MainWindow::MainWindow(QWidget* parent)
                     if (capabilities.nvencH264) {
                         encoderList << QStringLiteral("NVENC H.264");
                     }
+                    if (capabilities.amfH264) {
+                        encoderList << QStringLiteral("AMD AMF H.264");
+                    }
+                    if (capabilities.qsvH264) {
+                        encoderList << QStringLiteral("Intel QSV H.264");
+                    }
+                    if (capabilities.videoToolboxH264) {
+                        encoderList << QStringLiteral("Apple VideoToolbox H.264");
+                    }
                     if (capabilities.softwareH264) {
                         encoderList << QStringLiteral("software H.264");
                     }
@@ -376,6 +385,9 @@ QWidget* MainWindow::buildVideoPage() {
     codecCombo_ = new QComboBox(page);
     codecCombo_->addItem(QStringLiteral("Auto"), QStringLiteral("auto"));
     codecCombo_->addItem(QStringLiteral("H.264 NVENC"), QStringLiteral("h264_nvenc"));
+    codecCombo_->addItem(QStringLiteral("H.264 AMD AMF"), QStringLiteral("h264_amf"));
+    codecCombo_->addItem(QStringLiteral("H.264 Intel QSV"), QStringLiteral("h264_qsv"));
+    codecCombo_->addItem(QStringLiteral("H.264 Apple VideoToolbox"), QStringLiteral("h264_videotoolbox"));
     codecCombo_->addItem(QStringLiteral("Software H.264"), QStringLiteral("libx264"));
     codecCombo_->addItem(QStringLiteral("VP9 (WebM)"), QStringLiteral("libvpx-vp9"));
     const int codecIndex = codecCombo_->findData(QString::fromStdString(settings_.video.codec));
@@ -397,8 +409,11 @@ QWidget* MainWindow::buildVideoPage() {
     maxFileSizeSpin_->setSuffix(QStringLiteral(" MiB"));
     maxFileSizeSpin_->setValue(settings_.video.maxFileSizeMiB);
     form->addRow(QStringLiteral("Лимит файла"), maxFileSizeSpin_);
+    estimatedSizeLabel_ = new QLabel(page);
+    estimatedSizeLabel_->setWordWrap(true);
+    form->addRow(QStringLiteral("Оценка размера"), estimatedSizeLabel_);
     layout->addLayout(form);
-    layout->addWidget(description(QStringLiteral("MP4/MKV используют H.264, WebM — VP9. Auto выбирает H.264 NVENC на Windows и сохраняет fallback через software encoder."), page));
+    layout->addWidget(description(QStringLiteral("MP4/MKV используют H.264, WebM — VP9. Auto выбирает доступный hardware H.264 через capability probe и сохраняет fallback через software encoder."), page));
     layout->addStretch();
     connect(containerCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
         settings_.video.container = containerCombo_->itemData(index).toString().toStdString();
@@ -428,14 +443,24 @@ QWidget* MainWindow::buildVideoPage() {
                                         : value.compare(QStringLiteral("Medium"), Qt::CaseInsensitive) == 0 ? 10000
                                         : value.compare(QStringLiteral("Ultra"), Qt::CaseInsensitive) == 0 ? 24000
                                                                                                            : 16000;
-                    const QSignalBlocker blocker(bitrateSpin_);
                     bitrateSpin_->setValue(bitrate);
                 }
             });
+    const auto updateEstimatedSize = [this] {
+        const int duration = durationSpin_ == nullptr ? settings_.buffer.durationSeconds : durationSpin_->value();
+        const double estimatedMiB = static_cast<double>(settings_.video.customBitrateKbps) * duration / 8.0 / 1024.0;
+        const bool overLimit = estimatedMiB > settings_.video.maxFileSizeMiB;
+        estimatedSizeLabel_->setText(QStringLiteral("≈ %1 MiB на %2 s; %3")
+                                         .arg(estimatedMiB, 0, 'f', 1)
+                                         .arg(duration)
+                                         .arg(overLimit ? QStringLiteral("выше лимита, экспорт будет остановлен")
+                                                        : QStringLiteral("в пределах лимита")));
+        estimatedSizeLabel_->setStyleSheet(overLimit ? QStringLiteral("color: #D94841;") : QString());
+    };
     connect(bitrateSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
-            [this](int value) { settings_.video.customBitrateKbps = value; });
+            [this, updateEstimatedSize](int value) { settings_.video.customBitrateKbps = value; updateEstimatedSize(); });
     connect(maxFileSizeSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
-            [this](int value) { settings_.video.maxFileSizeMiB = value; });
+            [updateEstimatedSize](int) { updateEstimatedSize(); });
     const bool customPreset = presetCombo_->currentText().compare(QStringLiteral("Custom"), Qt::CaseInsensitive) == 0;
     bitrateSpin_->setReadOnly(!customPreset);
     if (!customPreset) {
@@ -445,6 +470,7 @@ QWidget* MainWindow::buildVideoPage() {
                             : value.compare(QStringLiteral("Ultra"), Qt::CaseInsensitive) == 0 ? 24000 : 16000;
         bitrateSpin_->setValue(bitrate);
     }
+    updateEstimatedSize();
     return page;
 }
 
@@ -606,6 +632,20 @@ QWidget* MainWindow::buildAdvancedPage() {
     durationSpin_->setValue(settings_.buffer.durationSeconds);
     durationSpin_->setSuffix(QStringLiteral(" s"));
     form->addRow(QStringLiteral("Длина буфера"), durationSpin_);
+    connect(durationSpin_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+        settings_.buffer.durationSeconds = value;
+        if (estimatedSizeLabel_ != nullptr) {
+            const double estimatedMiB = static_cast<double>(settings_.video.customBitrateKbps) * value / 8.0 / 1024.0;
+            estimatedSizeLabel_->setText(QStringLiteral("≈ %1 MiB на %2 s; %3")
+                                             .arg(estimatedMiB, 0, 'f', 1)
+                                             .arg(value)
+                                             .arg(estimatedMiB > settings_.video.maxFileSizeMiB
+                                                      ? QStringLiteral("выше лимита, экспорт будет остановлен")
+                                                      : QStringLiteral("в пределах лимита")));
+            estimatedSizeLabel_->setStyleSheet(estimatedMiB > settings_.video.maxFileSizeMiB
+                                                    ? QStringLiteral("color: #D94841;") : QString());
+        }
+    });
     themeCombo_ = new QComboBox(page);
     themeCombo_->addItems({QStringLiteral("Тёмная"), QStringLiteral("Светлая")});
     themeCombo_->setCurrentIndex(settings_.extras.value("theme", std::string("dark")) == "light" ? 1 : 0);
@@ -620,7 +660,6 @@ QWidget* MainWindow::buildAdvancedPage() {
     layout->addWidget(diagnosticsButton_);
     layout->addWidget(description(QStringLiteral("Телеметрия отключена. Проверка обновлений будет ручной через GitHub Releases и по умолчанию отключена."), page));
     layout->addStretch();
-    connect(durationSpin_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) { settings_.buffer.durationSeconds = value; });
     connect(themeCombo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::chooseTheme);
     connect(updateButton_, &QPushButton::clicked, this, &MainWindow::checkForUpdates);
     connect(diagnosticsButton_, &QPushButton::clicked, this, &MainWindow::copyDiagnostics);
