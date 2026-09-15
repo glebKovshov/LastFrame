@@ -71,7 +71,19 @@ jobs:
         run: cmake -S . -B build/windows -G Ninja Multi-Config -DLASTFRAME_BUILD_UI=ON -DLASTFRAME_BUILD_TESTS=ON -DLASTFRAME_BUILD_SMOKE=OFF
 
       - name: Build
-        run: cmake --build build/windows --config Release --parallel
+        shell: pwsh
+        run: |
+          & cmake --build build/windows --config Release --parallel 2 --verbose 2>&1 | Tee-Object build.log
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastFrame-windows-build-log
+          path: build.log
 
       - name: Test
         run: ctest --test-dir build/windows -C Release --output-on-failure
