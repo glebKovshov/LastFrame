@@ -83,14 +83,10 @@
 
 1. Интеграционная проверка на конкретных capture backend'ах, что исключение
    overlay действительно соблюдается, и тесты DRM/HDR capability states.
-2. Audio endpoint-specific reattach/retry после исчезновения и возврата устройства;
-   текущий native WASAPI path уже передаёт mixed PCM в encoder, имеет silence-fill,
-   degradation без падения второго источника, fallback на portable FFmpeg audio и
-   runtime mute/unmute microphone через global hotkey и tray action.
-3. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
-4. Завершить DPI-specific validation для high-DPI monitor geometry и native
+2. GPU scaler и прямой FFmpeg library encoder/muxer вместо процесса FFmpeg.
+3. Завершить DPI-specific validation для high-DPI monitor geometry и native
    macOS ScreenCaptureKit/Linux PipeWire/portal backends.
-5. Интеграционные тесты на RTX 3070 и полная матрица Windows/Linux/macOS arm64.
+4. Интеграционные тесты на RTX 3070 и полная матрица Windows/Linux/macOS arm64.
 
 До реализации следующих срезов UI честно показывает, что segment recorder
 требует доступный FFmpeg; native DXGI/WGC и native WASAPI capability включаются
