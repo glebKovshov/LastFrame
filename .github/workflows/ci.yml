@@ -61,7 +61,7 @@ jobs:
           & $env:QT_PYTHON --version
           & $env:QT_PYTHON -m pip install --disable-pip-version-check --no-warn-script-location "aqtinstall==3.3.0" "py7zr==1.1.0"
           $qtRoot = Join-Path $env:RUNNER_WORKSPACE 'Qt'
-          & $env:QT_PYTHON -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 --outputdir $qtRoot --modules qtnetwork
+          & $env:QT_PYTHON -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 --outputdir $qtRoot
           $qtPrefix = Join-Path $qtRoot '6.8.3\msvc2022_64'
           "QT_ROOT_DIR=$qtPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "CMAKE_PREFIX_PATH=$qtPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
