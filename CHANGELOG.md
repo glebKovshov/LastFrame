@@ -32,6 +32,8 @@
   VideoToolbox, plus an estimated export size and FFmpeg output-size guard.
 - Added a click-through corner notification overlay with animated accent/error
   indicator; on supported Windows capture APIs it requests `WDA_EXCLUDEFROMCAPTURE`.
+- Added Windows lock/sleep/hibernate lifecycle handling: capture sessions pause on
+  suspend/lock and use the existing two-second Auto resume path after unlock/resume.
 
 ## 0.1.0 — Windows MVP
 

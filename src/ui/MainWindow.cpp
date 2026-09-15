@@ -34,6 +34,11 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#if defined(Q_OS_WIN)
+#include <Windows.h>
+#include <wtsapi32.h>
+#endif
+
 #include <algorithm>
 #include <functional>
 
@@ -83,6 +88,9 @@ MainWindow::MainWindow(QWidget* parent)
     }
     setupTray();
     registerHotkeys();
+#if defined(Q_OS_WIN)
+    WTSRegisterSessionNotification(reinterpret_cast<HWND>(winId()), NOTIFY_FOR_THIS_SESSION);
+#endif
     refreshMonitors();
     applyTheme(settings_.extras.value("theme", std::string("dark")) != "light");
 
@@ -185,13 +193,20 @@ MainWindow::MainWindow(QWidget* parent)
             return;
         }
         monitorResumePending_ = false;
-        recorder_.start(settings_);
-        showToast(QStringLiteral("Захват автоматически продолжен после восстановления монитора."));
+        if (recorder_.isPaused()) {
+            recorder_.resume();
+        } else {
+            recorder_.start(settings_);
+        }
+        showToast(QStringLiteral("Захват автоматически продолжен после восстановления источника."));
     });
     applyRecorderState();
 }
 
 MainWindow::~MainWindow() {
+#if defined(Q_OS_WIN)
+    WTSUnRegisterSessionNotification(reinterpret_cast<HWND>(winId()));
+#endif
     saveSettings();
     delete notificationOverlay_;
 }
@@ -1057,5 +1072,67 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     saveSettings();
     event->accept();
 }
+
+#if defined(Q_OS_WIN)
+bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr* result) {
+    Q_UNUSED(eventType)
+    auto* msg = static_cast<MSG*>(message);
+    if (msg == nullptr) {
+        return QMainWindow::nativeEvent(eventType, message, result);
+    }
+    const auto suspend = [this](const QString& reason) {
+        if (lifecycleSuspended_) {
+            return;
+        }
+        lifecycleWasRecording_ = recorder_.isRecording();
+        lifecycleSuspended_ = true;
+        if (lifecycleWasRecording_) {
+            recorder_.pause();
+            showToast(reason);
+        }
+    };
+    const auto resume = [this] {
+        if (!lifecycleSuspended_) {
+            return;
+        }
+        lifecycleSuspended_ = false;
+        if (!lifecycleWasRecording_) {
+            return;
+        }
+        lifecycleWasRecording_ = false;
+        if (!settings_.capture.autoResume) {
+            showToast(QStringLiteral("Источник вернулся; возобновление отключено в настройках."), true);
+            return;
+        }
+        monitorResumePending_ = true;
+        autoResumeSignature_ = monitorSignature_;
+        autoResumeTimer_.start(2000);
+        showToast(QStringLiteral("Источник вернулся; проверяю его стабильность перед продолжением."));
+    };
+    if (msg->message == WM_POWERBROADCAST) {
+        if (msg->wParam == PBT_APMSUSPEND) {
+            suspend(QStringLiteral("Захват приостановлен: Windows переводит систему в sleep."));
+            if (result != nullptr) {
+                *result = TRUE;
+            }
+            return true;
+        }
+        if (msg->wParam == PBT_APMRESUMEAUTOMATIC || msg->wParam == PBT_APMRESUMESUSPEND) {
+            resume();
+            if (result != nullptr) {
+                *result = TRUE;
+            }
+            return true;
+        }
+    } else if (msg->message == WM_WTSSESSION_CHANGE) {
+        if (msg->wParam == WTS_SESSION_LOCK) {
+            suspend(QStringLiteral("Захват приостановлен: рабочая сессия заблокирована."));
+        } else if (msg->wParam == WTS_SESSION_UNLOCK) {
+            resume();
+        }
+    }
+    return QMainWindow::nativeEvent(eventType, message, result);
+}
+#endif
 
 } // namespace LastFrame::UI

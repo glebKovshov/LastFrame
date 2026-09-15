@@ -41,6 +41,9 @@ public slots:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+#if defined(Q_OS_WIN)
+    bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
+#endif
 
 private slots:
     void startOrStop();
@@ -130,6 +133,8 @@ private:
     bool monitorResumePending_ = false;
     bool forceQuit_ = false;
     bool settingsRecovered_ = false;
+    bool lifecycleWasRecording_ = false;
+    bool lifecycleSuspended_ = false;
 };
 
 } // namespace LastFrame::UI

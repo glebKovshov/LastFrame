@@ -114,7 +114,7 @@ if(LASTFRAME_BUILD_UI)
             list(SORT LASTFRAME_CPPWINRT_INCLUDE_DIRS COMPARE NATURAL ORDER DESCENDING)
             list(GET LASTFRAME_CPPWINRT_INCLUDE_DIRS 0 LASTFRAME_CPPWINRT_INCLUDE_DIR)
             target_include_directories(LastFrame PRIVATE "${LASTFRAME_CPPWINRT_INCLUDE_DIR}")
-            target_link_libraries(LastFrame PRIVATE user32 shell32 ole32 avrt d3d11 dxgi gdi32 runtimeobject)
+            target_link_libraries(LastFrame PRIVATE user32 shell32 ole32 avrt d3d11 dxgi gdi32 runtimeobject wtsapi32)
         endif()
 
         set_target_properties(LastFrame PROPERTIES
