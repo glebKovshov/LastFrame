@@ -429,7 +429,11 @@ FFmpeg допускается в LGPL/GPL конфигурации; итогов
   },
   "notifications": {
     "enabled": true,
-    "overlayEnabled": true
+    "overlayEnabled": true,
+    "language": "ru",
+    "corner": "top_right",
+    "durationMs": 3500,
+    "opacity": 0.9
   },
   "privacy": {
     "updateCheckEnabled": false,

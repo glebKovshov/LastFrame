@@ -74,9 +74,12 @@
 - При полной потере native WASAPI endpoint выполняются такие же три reattach-попытки,
   затем portable FFmpeg audio; потеря только одного источника остаётся degraded
   состоянием с продолжением второго источника и silence-fill.
-- Страница Notifications с настройками системных уведомлений и click-through
-  corner toast overlay с анимированным индикатором; на Windows overlay запрашивает
+- Страница Notifications с настройками системных уведомлений, языка встроенных
+  сообщений, четырёх углов, длительности и прозрачности click-through toast overlay
+  с анимированным индикатором; на Windows overlay запрашивает
   `WDA_EXCLUDEFROMCAPTURE`, настройки сохраняются в JSON.
+- Страница Storage позволяет выбрать каталог клипов и блокирует read-only, сетевые
+  и съёмные носители; Capture предлагает Native, 720p, 1080p, 1440p, 4K и Custom.
 - GitHub Actions для core tests и Windows portable artifact.
 
 ## Оставшиеся обязательные срезы по ТЗ

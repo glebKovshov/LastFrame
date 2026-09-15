@@ -169,6 +169,8 @@ void testSettings() {
         {"capture", {{"source", "unknown"}, {"fps", 1}, {"outputWidth", 99999}}},
         {"video", {{"container", "avi"}, {"codec", "unknown"}, {"preset", "bad"},
                     {"customBitrateKbps", 1}, {"maxFileSizeMiB", 99999}}},
+        {"notifications", {{"language", "de"}, {"corner", "center"},
+                            {"durationMs", 999999}, {"opacity", -1.0}}},
         {"futureSection", {{"keep", true}}},
     });
     assert(normalized.language == "ru");
@@ -182,6 +184,10 @@ void testSettings() {
     assert(normalized.video.preset == "high");
     assert(normalized.video.customBitrateKbps == 1000);
     assert(normalized.video.maxFileSizeMiB == 4096);
+    assert(normalized.notifications.language == "ru");
+    assert(normalized.notifications.corner == "top_right");
+    assert(normalized.notifications.durationMs == 10000);
+    assert(normalized.notifications.opacity == 0.20);
     for (const char* codec : {"h264_nvenc", "h264_amf", "h264_qsv", "h264_videotoolbox", "libx264", "libvpx-vp9"}) {
         const auto codecSettings = Settings::fromJson({{"video", {{"codec", codec}}}});
         assert(codecSettings.video.codec == codec);

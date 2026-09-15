@@ -32,9 +32,7 @@ NotificationOverlay::NotificationOverlay(QWidget* parent) : QWidget(parent) {
 void NotificationOverlay::showMessage(const QString& text, const bool error, const int durationMs) {
     text_ = text;
     error_ = error;
-    if (!monitorGeometry_.isEmpty()) {
-        move(monitorGeometry_.right() - width() - 24, monitorGeometry_.top() + 24);
-    }
+    reposition();
     hideTimer_.start(std::max(500, durationMs));
     show();
     raise();
@@ -44,9 +42,33 @@ void NotificationOverlay::showMessage(const QString& text, const bool error, con
 
 void NotificationOverlay::setMonitorGeometry(const QRect& geometry) {
     monitorGeometry_ = geometry;
-    if (isVisible() && !monitorGeometry_.isEmpty()) {
-        move(monitorGeometry_.right() - width() - 24, monitorGeometry_.top() + 24);
+    reposition();
+}
+
+void NotificationOverlay::setCorner(const QString& corner) {
+    if (corner == QStringLiteral("top_left") || corner == QStringLiteral("top_right") ||
+        corner == QStringLiteral("bottom_left") || corner == QStringLiteral("bottom_right")) {
+        corner_ = corner;
+    } else {
+        corner_ = QStringLiteral("top_right");
     }
+    reposition();
+}
+
+void NotificationOverlay::setOpacity(const double opacity) {
+    setWindowOpacity(std::clamp(opacity, 0.20, 1.0));
+}
+
+void NotificationOverlay::reposition() {
+    if (monitorGeometry_.isEmpty()) {
+        return;
+    }
+    constexpr int margin = 24;
+    const bool left = corner_ == QStringLiteral("top_left") || corner_ == QStringLiteral("bottom_left");
+    const bool bottom = corner_ == QStringLiteral("bottom_left") || corner_ == QStringLiteral("bottom_right");
+    const int x = left ? monitorGeometry_.left() + margin : monitorGeometry_.right() - width() - margin;
+    const int y = bottom ? monitorGeometry_.bottom() - height() - margin : monitorGeometry_.top() + margin;
+    move(x, y);
 }
 
 void NotificationOverlay::paintEvent(QPaintEvent* event) {

@@ -10,6 +10,7 @@
 #include <QComboBox>
 #include <QDir>
 #include <QDesktopServices>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -75,6 +76,54 @@ QString locateFfmpegForUi() {
     return QFileInfo::exists(adjacent) ? adjacent : QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
 }
 
+QString localizeNotification(const QString& text, const QString& language) {
+    if (language.compare(QStringLiteral("en"), Qt::CaseInsensitive) != 0) {
+        return text;
+    }
+    if (text == QStringLiteral("Буфер запущен")) return QStringLiteral("Buffer started");
+    if (text == QStringLiteral("Буфер остановлен")) return QStringLiteral("Buffer stopped");
+    if (text == QStringLiteral("Микрофон выключен")) return QStringLiteral("Microphone muted");
+    if (text == QStringLiteral("Микрофон включён")) return QStringLiteral("Microphone unmuted");
+    if (text == QStringLiteral("Установлена актуальная версия.")) return QStringLiteral("You are up to date.");
+    if (text == QStringLiteral("Опубликованных releases пока нет.")) return QStringLiteral("No releases have been published yet.");
+    if (text == QStringLiteral("Диагностика скопирована в буфер обмена.")) return QStringLiteral("Diagnostics copied to clipboard.");
+    if (text == QStringLiteral("Буфер очищен; сохранённые клипы не затронуты.")) return QStringLiteral("Buffer cleared; saved clips were not touched.");
+    if (text == QStringLiteral("Клип сохранён")) return QStringLiteral("Clip saved");
+    if (text == QStringLiteral("LastFrame свёрнут в трей.")) return QStringLiteral("LastFrame was minimized to the tray.");
+    if (text.startsWith(QStringLiteral("Клип сохранён: "))) {
+        return QStringLiteral("Clip saved: ") + text.mid(QStringLiteral("Клип сохранён: ").size());
+    }
+    if (text.startsWith(QStringLiteral("Доступна новая версия "))) {
+        return QStringLiteral("A new version is available ") + text.mid(QStringLiteral("Доступна новая версия ").size());
+    }
+    return text;
+}
+
+bool validateLocalStoragePath(const QString& path, QString* reason) {
+    const QStorageInfo storage(path);
+    if (!storage.isValid() || !storage.isReady()) {
+        if (reason != nullptr) *reason = QStringLiteral("Носитель недоступен или ещё не готов.");
+        return false;
+    }
+    if (storage.isReadOnly()) {
+        if (reason != nullptr) *reason = QStringLiteral("Носитель доступен только для чтения.");
+        return false;
+    }
+    if (storage.bytesAvailable() < 64LL * 1024LL * 1024LL) {
+        if (reason != nullptr) *reason = QStringLiteral("На носителе должно быть не менее 64 MiB свободного места.");
+        return false;
+    }
+#if defined(Q_OS_WIN)
+    const QString root = QDir::toNativeSeparators(storage.rootPath());
+    const UINT driveType = GetDriveTypeW(reinterpret_cast<LPCWSTR>(root.utf16()));
+    if (driveType != DRIVE_FIXED && driveType != DRIVE_RAMDISK) {
+        if (reason != nullptr) *reason = QStringLiteral("Выберите каталог на локальном фиксированном диске; сетевые и съёмные носители не поддерживаются.");
+        return false;
+    }
+#endif
+    return true;
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent)
@@ -84,6 +133,8 @@ MainWindow::MainWindow(QWidget* parent)
     loadSettings();
     buildUi();
     notificationOverlay_ = new NotificationOverlay;
+    notificationOverlay_->setCorner(QString::fromStdString(settings_.notifications.corner));
+    notificationOverlay_->setOpacity(settings_.notifications.opacity);
     if (settingsRecovered_) {
         showToast(QStringLiteral("settings.json повреждён; создана конфигурация по умолчанию."), true);
     }
@@ -342,6 +393,14 @@ QWidget* MainWindow::buildCapturePage() {
     fpsSpin_->setRange(15, 360);
     fpsSpin_->setValue(settings_.capture.fps);
     form->addRow(QStringLiteral("FPS"), fpsSpin_);
+    auto* resolutionPreset = new QComboBox(page);
+    resolutionPreset->addItem(QStringLiteral("Native"), QStringLiteral("0x0"));
+    resolutionPreset->addItem(QStringLiteral("1280 × 720"), QStringLiteral("1280x720"));
+    resolutionPreset->addItem(QStringLiteral("1920 × 1080"), QStringLiteral("1920x1080"));
+    resolutionPreset->addItem(QStringLiteral("2560 × 1440"), QStringLiteral("2560x1440"));
+    resolutionPreset->addItem(QStringLiteral("3840 × 2160"), QStringLiteral("3840x2160"));
+    resolutionPreset->addItem(QStringLiteral("Custom"), QStringLiteral("custom"));
+    form->addRow(QStringLiteral("Разрешение вывода"), resolutionPreset);
     outputWidthSpin_ = new QSpinBox(page);
     outputWidthSpin_->setRange(0, 16384);
     outputWidthSpin_->setSpecialValueText(QStringLiteral("Native"));
@@ -352,6 +411,38 @@ QWidget* MainWindow::buildCapturePage() {
     outputHeightSpin_->setSpecialValueText(QStringLiteral("Native"));
     outputHeightSpin_->setValue(settings_.capture.outputHeight);
     form->addRow(QStringLiteral("Высота вывода"), outputHeightSpin_);
+    const auto resolutionMatches = [this](const QString& value) {
+        const QStringList parts = value.split(QLatin1Char('x'));
+        return parts.size() == 2 && settings_.capture.outputWidth == parts.at(0).toInt() &&
+               settings_.capture.outputHeight == parts.at(1).toInt();
+    };
+    int resolutionIndex = resolutionPreset->count() - 1;
+    for (int index = 0; index < resolutionPreset->count() - 1; ++index) {
+        if (resolutionMatches(resolutionPreset->itemData(index).toString())) {
+            resolutionIndex = index;
+            break;
+        }
+    }
+    resolutionPreset->setCurrentIndex(resolutionIndex);
+    const auto applyResolutionPreset = [this, resolutionPreset](int index) {
+        const bool custom = index == resolutionPreset->count() - 1;
+        if (!custom) {
+            const QStringList parts = resolutionPreset->itemData(index).toString().split(QLatin1Char('x'));
+            if (parts.size() == 2) {
+                const QSignalBlocker widthBlocker(outputWidthSpin_);
+                const QSignalBlocker heightBlocker(outputHeightSpin_);
+                const int width = parts.at(0).toInt();
+                const int height = parts.at(1).toInt();
+                outputWidthSpin_->setValue(width);
+                outputHeightSpin_->setValue(height);
+                settings_.capture.outputWidth = width;
+                settings_.capture.outputHeight = height;
+            }
+        }
+        outputWidthSpin_->setReadOnly(!custom);
+        outputHeightSpin_->setReadOnly(!custom);
+    };
+    applyResolutionPreset(resolutionIndex);
     layout->addLayout(form);
     layout->addWidget(description(QStringLiteral("Регион ограничивается выбранным монитором. HDR-мониторы помечаются как HDR → SDR: защищённый контент не обходится, а HDR-диапазон может быть потерян. Параметры применяются при следующем запуске буфера."), page));
     layout->addStretch();
@@ -374,10 +465,21 @@ QWidget* MainWindow::buildCapturePage() {
         }
     });
     connect(fpsSpin_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) { settings_.capture.fps = value; });
+    connect(resolutionPreset, qOverload<int>(&QComboBox::currentIndexChanged), this, applyResolutionPreset);
     connect(outputWidthSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
-            [this](int value) { settings_.capture.outputWidth = value; });
+            [this, resolutionPreset](int value) {
+                settings_.capture.outputWidth = value;
+                if (resolutionPreset->currentIndex() != resolutionPreset->count() - 1) {
+                    resolutionPreset->setCurrentIndex(resolutionPreset->count() - 1);
+                }
+            });
     connect(outputHeightSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
-            [this](int value) { settings_.capture.outputHeight = value; });
+            [this, resolutionPreset](int value) {
+                settings_.capture.outputHeight = value;
+                if (resolutionPreset->currentIndex() != resolutionPreset->count() - 1) {
+                    resolutionPreset->setCurrentIndex(resolutionPreset->count() - 1);
+                }
+            });
     return page;
 }
 
@@ -473,7 +575,10 @@ QWidget* MainWindow::buildVideoPage() {
     connect(bitrateSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
             [this, updateEstimatedSize](int value) { settings_.video.customBitrateKbps = value; updateEstimatedSize(); });
     connect(maxFileSizeSpin_, qOverload<int>(&QSpinBox::valueChanged), this,
-            [updateEstimatedSize](int) { updateEstimatedSize(); });
+            [this, updateEstimatedSize](int value) {
+                settings_.video.maxFileSizeMiB = value;
+                updateEstimatedSize();
+            });
     const bool customPreset = presetCombo_->currentText().compare(QStringLiteral("Custom"), Qt::CaseInsensitive) == 0;
     bitrateSpin_->setReadOnly(!customPreset);
     if (!customPreset) {
@@ -603,24 +708,56 @@ QWidget* MainWindow::buildStoragePage() {
     layout->setContentsMargins(42, 36, 42, 36);
     layout->addWidget(heading(QStringLiteral("Storage"), page));
     layout->addWidget(description(QStringLiteral("Готовые клипы не удаляются автоматически. Незавершённые временные сегменты находятся в каталоге приложения."), page));
-    const QString clipsPath = settings_.storage.clipsDirectory.empty()
-                                  ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame"
-                                  : QString::fromStdString(settings_.storage.clipsDirectory.string());
-    auto* path = new QLabel(clipsPath, page);
+    auto* path = new QLabel(page);
     path->setWordWrap(true);
     layout->addWidget(path);
-    const QStorageInfo storage(clipsPath);
-    const double freeGiB = storage.isValid() && storage.isReady()
-                               ? static_cast<double>(storage.bytesAvailable()) / 1024.0 / 1024.0 / 1024.0
-                               : 0.0;
-    const QString storageState = !storage.isValid() || !storage.isReady()
-                                     ? QStringLiteral("Носитель недоступен или ещё не готов.")
-                                     : storage.isReadOnly()
-                                           ? QStringLiteral("Носитель доступен только для чтения.")
-                                           : QStringLiteral("Свободно примерно %1 GiB.").arg(freeGiB, 0, 'f', 1);
-    layout->addWidget(description(storageState, page));
-    layout->addWidget(description(QStringLiteral("Portable MVP использует локальный системный диск; сетевые и съёмные каталоги не являются гарантированными и блокируются при read-only/недостатке места."), page));
+    auto* storageState = new QLabel(page);
+    storageState->setWordWrap(true);
+    layout->addWidget(storageState);
+    auto* choose = new QPushButton(QStringLiteral("Выбрать каталог клипов"), page);
+    layout->addWidget(choose);
+
+    const QString defaultPath = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame";
+    const auto selectedPath = [this, defaultPath] {
+        return settings_.storage.clipsDirectory.empty()
+                   ? defaultPath
+                   : QString::fromStdString(settings_.storage.clipsDirectory.string());
+    };
+    const auto refreshStorage = [this, path, storageState, selectedPath] {
+        const QString clipsPath = selectedPath();
+        path->setText(QStringLiteral("Клипы: %1").arg(clipsPath));
+        const QStorageInfo storage(clipsPath);
+        const double freeGiB = storage.isValid() && storage.isReady()
+                                   ? static_cast<double>(storage.bytesAvailable()) / 1024.0 / 1024.0 / 1024.0
+                                   : 0.0;
+        const QString state = !storage.isValid() || !storage.isReady()
+                                  ? QStringLiteral("Носитель недоступен или ещё не готов.")
+                                  : storage.isReadOnly()
+                                        ? QStringLiteral("Носитель доступен только для чтения.")
+                                        : QStringLiteral("Свободно примерно %1 GiB.").arg(freeGiB, 0, 'f', 1);
+        storageState->setText(state);
+    };
+    refreshStorage();
+    layout->addWidget(description(QStringLiteral("Можно выбрать только локальный фиксированный диск. Сетевые и съёмные носители блокируются; временные сегменты остаются в локальном каталоге приложения."), page));
     layout->addStretch();
+    connect(choose, &QPushButton::clicked, this, [this, page, choose, refreshStorage] {
+        const QString current = settings_.storage.clipsDirectory.empty()
+                                    ? QStandardPaths::writableLocation(QStandardPaths::MoviesLocation) + "/LastFrame"
+                                    : QString::fromStdString(settings_.storage.clipsDirectory.string());
+        const QString selected = QFileDialog::getExistingDirectory(page, QStringLiteral("Каталог клипов"), current);
+        if (selected.isEmpty()) {
+            return;
+        }
+        QString reason;
+        if (!validateLocalStoragePath(selected, &reason)) {
+            QMessageBox::warning(page, QStringLiteral("Каталог недоступен"), reason);
+            return;
+        }
+        settings_.storage.clipsDirectory = std::filesystem::path(selected.toStdString());
+        refreshStorage();
+        choose->setToolTip(selected);
+        showToast(QStringLiteral("Каталог клипов изменён."));
+    });
     return page;
 }
 
@@ -634,14 +771,54 @@ QWidget* MainWindow::buildNotificationsPage() {
     auto* enabled = new QCheckBox(QStringLiteral("Показывать уведомления"), page);
     enabled->setChecked(settings_.notifications.enabled);
     form->addRow(QStringLiteral("Системные уведомления"), enabled);
-    auto* overlay = new QCheckBox(QStringLiteral("Показывать угловой overlay в окне приложения"), page);
+    auto* overlay = new QCheckBox(QStringLiteral("Показывать угловой overlay"), page);
     overlay->setChecked(settings_.notifications.overlayEnabled);
     form->addRow(QStringLiteral("Toast overlay"), overlay);
+    auto* language = new QComboBox(page);
+    language->addItem(QStringLiteral("Русский"), QStringLiteral("ru"));
+    language->addItem(QStringLiteral("English"), QStringLiteral("en"));
+    language->setCurrentIndex(std::max(0, language->findData(QString::fromStdString(settings_.notifications.language))));
+    form->addRow(QStringLiteral("Язык уведомлений"), language);
+    auto* corner = new QComboBox(page);
+    corner->addItem(QStringLiteral("Сверху справа"), QStringLiteral("top_right"));
+    corner->addItem(QStringLiteral("Сверху слева"), QStringLiteral("top_left"));
+    corner->addItem(QStringLiteral("Снизу справа"), QStringLiteral("bottom_right"));
+    corner->addItem(QStringLiteral("Снизу слева"), QStringLiteral("bottom_left"));
+    corner->setCurrentIndex(std::max(0, corner->findData(QString::fromStdString(settings_.notifications.corner))));
+    form->addRow(QStringLiteral("Положение overlay"), corner);
+    auto* duration = new QSpinBox(page);
+    duration->setRange(500, 10000);
+    duration->setSingleStep(250);
+    duration->setSuffix(QStringLiteral(" ms"));
+    duration->setValue(settings_.notifications.durationMs);
+    form->addRow(QStringLiteral("Длительность"), duration);
+    auto* opacity = new QSpinBox(page);
+    opacity->setRange(20, 100);
+    opacity->setSuffix(QStringLiteral(" %"));
+    opacity->setValue(static_cast<int>(settings_.notifications.opacity * 100.0 + 0.5));
+    form->addRow(QStringLiteral("Непрозрачность"), opacity);
     layout->addLayout(form);
-    layout->addWidget(description(QStringLiteral("Системные toast-сообщения выводятся через трей. Overlay не перехватывает мышь и не используется как игровой HUD."), page));
+    layout->addWidget(description(QStringLiteral("Системные toast-сообщения выводятся через трей. Overlay не перехватывает мышь и не используется как игровой HUD; на Windows запрашивается исключение из поддерживаемого захвата экрана."), page));
     layout->addStretch();
     connect(enabled, &QCheckBox::toggled, this, [this](bool value) { settings_.notifications.enabled = value; });
     connect(overlay, &QCheckBox::toggled, this, [this](bool value) { settings_.notifications.overlayEnabled = value; });
+    connect(language, &QComboBox::currentIndexChanged, this, [this, language](int index) {
+        settings_.notifications.language = language->itemData(index).toString().toStdString();
+    });
+    connect(corner, &QComboBox::currentIndexChanged, this, [this, corner](int index) {
+        settings_.notifications.corner = corner->itemData(index).toString().toStdString();
+        if (notificationOverlay_ != nullptr) {
+            notificationOverlay_->setCorner(corner->itemData(index).toString());
+        }
+    });
+    connect(duration, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this](int value) { settings_.notifications.durationMs = value; });
+    connect(opacity, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+        settings_.notifications.opacity = static_cast<double>(value) / 100.0;
+        if (notificationOverlay_ != nullptr) {
+            notificationOverlay_->setOpacity(settings_.notifications.opacity);
+        }
+    });
     return page;
 }
 
@@ -927,7 +1104,10 @@ void MainWindow::onClipSaved(const QString& path) {
     Platform::Diagnostics::append(QStringLiteral("INFO"), QStringLiteral("Clip export completed."));
     showToast(QStringLiteral("Клип сохранён: %1").arg(QFileInfo(path).fileName()));
     if (tray_ != nullptr && settings_.notifications.enabled) {
-        tray_->showMessage(QStringLiteral("LastFrame"), QStringLiteral("Клип сохранён"), QSystemTrayIcon::Information, 2500);
+        tray_->showMessage(QStringLiteral("LastFrame"),
+                           localizeNotification(QStringLiteral("Клип сохранён"),
+                                                QString::fromStdString(settings_.notifications.language)),
+                           QSystemTrayIcon::Information, settings_.notifications.durationMs);
     }
 }
 
@@ -1012,7 +1192,11 @@ void MainWindow::showToast(const QString& text, const bool isError) {
     if (monitorIndex >= 0 && monitorIndex < monitors_.size()) {
         notificationOverlay_->setMonitorGeometry(monitors_.at(monitorIndex).geometry);
     }
-    notificationOverlay_->showMessage(text, isError);
+    notificationOverlay_->setCorner(QString::fromStdString(settings_.notifications.corner));
+    notificationOverlay_->setOpacity(settings_.notifications.opacity);
+    notificationOverlay_->showMessage(
+        localizeNotification(text, QString::fromStdString(settings_.notifications.language)), isError,
+        settings_.notifications.durationMs);
 }
 
 void MainWindow::setupTray() {

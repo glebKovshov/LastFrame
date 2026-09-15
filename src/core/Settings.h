@@ -68,6 +68,10 @@ struct StorageSettings {
 struct NotificationSettings {
     bool enabled = true;
     bool overlayEnabled = true;
+    std::string language = "ru";
+    std::string corner = "top_right";
+    int durationMs = 3500;
+    double opacity = 0.90;
     nlohmann::json extras = nlohmann::json::object();
 };
 

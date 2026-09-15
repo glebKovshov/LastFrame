@@ -105,6 +105,8 @@ nlohmann::json Settings::toJson() const {
     result["notifications"] = notifications.extras;
     result["notifications"].update({
         {"enabled", notifications.enabled}, {"overlayEnabled", notifications.overlayEnabled},
+        {"language", notifications.language}, {"corner", notifications.corner},
+        {"durationMs", notifications.durationMs}, {"opacity", notifications.opacity},
     });
 
     result["privacy"] = privacy.extras;
@@ -203,7 +205,21 @@ Settings Settings::fromJson(const nlohmann::json& json) {
     const auto notifications = json.value("notifications", nlohmann::json::object());
     settings.notifications.enabled = readValue(notifications, "enabled", settings.notifications.enabled);
     settings.notifications.overlayEnabled = readValue(notifications, "overlayEnabled", settings.notifications.overlayEnabled);
-    settings.notifications.extras = sectionExtras(notifications, {"enabled", "overlayEnabled"});
+    settings.notifications.language = readValue(notifications, "language", settings.notifications.language);
+    if (settings.notifications.language != "ru" && settings.notifications.language != "en") {
+        settings.notifications.language = "ru";
+    }
+    settings.notifications.corner = readValue(notifications, "corner", settings.notifications.corner);
+    if (settings.notifications.corner != "top_left" && settings.notifications.corner != "top_right" &&
+        settings.notifications.corner != "bottom_left" && settings.notifications.corner != "bottom_right") {
+        settings.notifications.corner = "top_right";
+    }
+    settings.notifications.durationMs = std::clamp(
+        readValue(notifications, "durationMs", settings.notifications.durationMs), 500, 10000);
+    settings.notifications.opacity = std::clamp(
+        readValue(notifications, "opacity", settings.notifications.opacity), 0.20, 1.0);
+    settings.notifications.extras = sectionExtras(
+        notifications, {"enabled", "overlayEnabled", "language", "corner", "durationMs", "opacity"});
 
     const auto privacy = json.value("privacy", nlohmann::json::object());
     settings.privacy.updateCheckEnabled = readValue(privacy, "updateCheckEnabled", settings.privacy.updateCheckEnabled);
